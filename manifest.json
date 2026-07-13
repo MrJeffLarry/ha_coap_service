@@ -1,0 +1,9 @@
+{
+  "domain": "ha_coap_service",
+  "name": "CoAP Service",
+  "documentation": "https://www.home-assistant.io",
+  "dependencies": [],
+  "requirements": ["aiocoap"],
+  "codeowners": ["@mrjefflarry"],
+  "config_flow": true
+}
