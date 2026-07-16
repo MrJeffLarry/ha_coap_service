@@ -8,20 +8,31 @@ class CoapSwitch(SwitchEntity):
         self._ip_address = ip_address # You need to store the IP!
         self._attr_unique_id = f"{DOMAIN}_{device_id}_switch"
         self._state = False
+        
+
+    async def async_turn_on(self, **kwargs):
+        # 1. Get the CoAP instance for this device
+        instance = self.hass.data[DOMAIN]["instances"].get(self._device_id)
+        
+        if instance:
+            # 2. Update the instance (which triggers the CoAP observe notification)
+            instance.update_state_from_ha("ON")
+            
+            # 3. Update Home Assistant UI
+            self._state = True
+            self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs):
+        instance = self.hass.data[DOMAIN]["instances"].get(self._device_id)
+        if instance:
+            instance.update_state_from_ha("OFF")
+            self._state = False
+            self.async_write_ha_state()
+
 
     @property
     def is_on(self):
         return self._state
-
-    async def async_turn_on(self, **kwargs):
-        await self._send_coap_command("ON")
-        self._state = True
-        self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs):
-        await self._send_coap_command("OFF")
-        self._state = False
-        self.async_write_ha_state()
 
     async def _send_coap_command(self, command):
         # Create a CoAP client context

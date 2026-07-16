@@ -5,20 +5,36 @@ from .const import DOMAIN
 async def async_setup_entry(hass, config_entry, async_add_entities):
     
     # Callback to dynamically add new entities
-    async def _add_new_device(device_id):
-        async_add_entities([CoapSensor(device_id)])
+    async def _add_new_device(data):
+        device_id = data.get("client_id")
+        new_entities = []
+        for sensor in data.get("sensors"):
+            new_entities.append(CoapSensor(device_id, "hagerman", sensor))
+        async_add_entities(new_entities)
 
     async_dispatcher_connect(hass, f"{DOMAIN}_new_device", _add_new_device)
 
 class CoapSensor(SensorEntity):
-    def __init__(self, device_id):
-        self._attr_unique_id = f"{DOMAIN}_{device_id}"
-        self._attr_name = f"CoAP Sensor {device_id}"
+    def __init__(self, device_id, vendor, sensor):
         self._state = None
+        self._device_id = device_id
+        self._vendor = vendor
+        self._attr_device_class = sensor.get("type")
+        self._attr_unique_id = f"{DOMAIN}_{device_id}_{self._attr_device_class}"
+        self._attr_name = f"{self._attr_device_class.capitalize()}"
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._device_id)}, # Same identifier = Same Device Group
+            "name": f"CoAP Device {self._device_id}",
+            "manufacturer": self._vendor,
+        }
 
     @property
     def state(self):
         return self._state
+    
 
     async def async_added_to_hass(self):
         # Listen for updates specific to this instance
@@ -31,3 +47,4 @@ class CoapSensor(SensorEntity):
     def _update_callback(self, value):
         self._state = value
         self.async_write_ha_state()
+        
