@@ -78,6 +78,39 @@ class WhoAmI(resource.Resource):
             content_format=ContentFormat.TEXT,
         )
 
+# CoAP Resource handling
+class CoapResource(resource.Resource):
+    def __init__(self, hass, entry):
+        super().__init__()
+        self.hass = hass
+        self.entry = entry
+
+    async def render_put(self, request):
+        try:
+            # 1. Decode bytes to string and parse JSON
+            raw_payload = request.payload.decode('utf-8')
+            data = json.loads(raw_payload)
+            # 2. Extract the field safely
+            device_id = data.get('client_id')
+
+            if not device_id:
+                return Message(code=Code.BAD_REQUEST, payload=b"Missing client_id")
+                
+            if device_id not in self.hass.data[DOMAIN][self.entry.entry_id]["discovered"]:
+                self.hass.data[DOMAIN][self.entry.entry_id]["discovered"].add(device_id)
+                # Tell sensor.py to add a new entity
+                async_dispatcher_send(self.hass, f"{DOMAIN}_new_device", data)
+            
+            # Update existing entity
+            async_dispatcher_send(self.hass, f"{DOMAIN}_update_{device_id}", data)
+
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            # If the payload isn't valid JSON
+            return Message(code=Code.BAD_REQUEST, payload=b"Invalid JSON")
+            
+        return Message(code=Code.CHANGED)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Load existing devices from Registry to avoid re-discovering them
     registry = er.async_get(hass)
@@ -93,51 +126,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         "discovered": known_devices,
         "instances": {}
     }
-
-    # CoAP Resource handling
-    class CoapResource(resource.Resource):
-        async def render_put(self, request):
-            try:
-                # 1. Decode bytes to string and parse JSON
-                raw_payload = request.payload.decode('utf-8')
-                data = json.loads(raw_payload)
-                # 2. Extract the field safely
-                device_id = data.get('client_id')
-
-                if not device_id:
-                   return Message(code=Code.BAD_REQUEST, payload=b"Missing client_id")
-                
-                if device_id not in hass.data[DOMAIN][entry.entry_id]["discovered"]:
-                    hass.data[DOMAIN][entry.entry_id]["discovered"].add(device_id)
-                    # Tell sensor.py to add a new entity
-                    async_dispatcher_send(hass, f"{DOMAIN}_new_device", data)
-            
-                # Update existing entity
-                async_dispatcher_send(hass, f"{DOMAIN}_update_{device_id}", data)
-
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                # If the payload isn't valid JSON
-                return Message(code=Code.BAD_REQUEST, payload=b"Invalid JSON")
-            
-            return Message(code=Code.CHANGED)
             
     # Setup CoAP Server
     root = resource.Site()
     root.add_resource(['whoami'], WhoAmI(hass, entry))
-    root.add_resource(['sensors', 'data'], CoapResource())
+    root.add_resource(['sensors', 'data'], CoapResource(hass, entry))
     # Register only the root path
     root.add_resource(['device'], TimeResource())
     #root.add_resource(['sensors'], SensorRootResource(hass, entry))
-    
-    # ... (context creation) ...
 
-    
     context = await Context.create_server_context(root, bind=('::', 5683))
     
     hass.data[DOMAIN][entry.entry_id]["coap_context"] = context
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     return True
-
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
