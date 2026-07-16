@@ -7,7 +7,7 @@ from aiocoap import Message
 
 from ha_coap_service import async_setup_entry, async_unload_entry
 from ha_coap_service.const import DOMAIN
-from ha_coap_service.tests.conftest import MockConfigEntry
+from conftest import MockConfigEntry
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,8 @@ import sys
 import types
 from unittest.mock import MagicMock, AsyncMock
 
-# Add the parent directory of ha_coap_service to sys.path
+# The repository root directory (ha_coap_service) itself is the package.
+# To import ha_coap_service, we must add its parent directory (two levels up from this file) to sys.path.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 # Create Home Assistant mock classes and modules

@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from ha_coap_service.sensor import async_setup_entry, CoapSensor
 from ha_coap_service.const import DOMAIN
-from ha_coap_service.tests.conftest import MockConfigEntry
+from conftest import MockConfigEntry
 
 
 @pytest.mark.asyncio
