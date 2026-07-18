@@ -17,7 +17,8 @@ async def main():
         "sensors": [
             {"type": "temperature", "value": 24.5},
             {"type": "humidity", "value": 45},
-	    {"type": "battery", "value": 65}
+	        {"type": "battery", "value": 65},
+            {"type": "co2", "value": 800}
         ]
     }
 
