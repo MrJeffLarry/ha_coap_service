@@ -110,6 +110,26 @@ class CoapResource(resource.Resource):
             
         return Message(code=Code.CHANGED)
 
+# If device does bot exist in HA it register here or at startup
+class NewDeviceRegister(resource.Resource):
+    def __init__(self, hass, entry):
+        super().__init__()
+        self.hass = hass
+        self.entry = entry
+
+# device send data to HA, send back register new device if not exist
+class DeviceData(resource.Resource):
+    def __init__(self, hass, entry):
+        super().__init__()
+        self.hass = hass
+        self.entry = entry
+
+# listen for device events from HA -> Device
+class DeviceObserveEntity(resource.Resource):
+    def __init__(self, hass, entry):
+        super().__init__()
+        self.hass = hass
+        self.entry = entry
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Load existing devices from Registry to avoid re-discovering them
