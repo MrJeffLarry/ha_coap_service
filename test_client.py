@@ -15,10 +15,10 @@ async def main():
     payload = {
         "client_id": "device001",
         "sensors": [
-            {"type": "temperature", "value": 24.5},
-            {"type": "humidity", "value": 45},
-	        {"type": "battery", "value": 65},
-            {"type": "co2", "value": 800}
+            {"type": "temperature", "value": 23.5},
+            {"type": "humidity", "value": 55},
+	        {"type": "battery", "value": 70},
+            {"type": "co2", "value": 810}
         ]
     }
 

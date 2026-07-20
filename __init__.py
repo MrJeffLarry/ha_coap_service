@@ -110,12 +110,43 @@ class CoapResource(resource.Resource):
             
         return Message(code=Code.CHANGED)
 
+def jsonPare(payload):
+    try:
+        # 1. Decode bytes to string and parse JSON
+        raw_payload = payload.decode('utf-8')
+        return json.loads(raw_payload), None
+
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # If the payload isn't valid JSON
+        return None, b"could not parse json"
+
 # If device does not exist in HA it register here or at startup
 class NewDeviceRegister(resource.Resource):
     def __init__(self, hass, entry):
         super().__init__()
         self.hass = hass
         self.entry = entry
+
+    async def render_put(self, request):
+        data, err = jsonPare(request.payload)
+        if err != None:
+            return Message(code=Code.BAD_REQUEST, payload=err)
+
+        # 2. Extract the field safely
+        device_id = data.get('client_id')
+
+        if not device_id:
+            return Message(code=Code.BAD_REQUEST, payload=b"Missing client_id")
+            
+        if device_id not in self.hass.data[DOMAIN][self.entry.entry_id]["discovered"]:
+            self.hass.data[DOMAIN][self.entry.entry_id]["discovered"].add(device_id)
+            # Tell sensor.py to add a new entity
+            async_dispatcher_send(self.hass, f"{DOMAIN}_new_device", data)
+        
+        # Update existing entity
+        async_dispatcher_send(self.hass, f"{DOMAIN}_update_{device_id}", data)
+            
+        return Message(code=Code.CHANGED)
 
 # device send data to HA, send back register new device if not exist
 class DeviceData(resource.Resource):
