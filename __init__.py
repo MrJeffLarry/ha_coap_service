@@ -110,7 +110,7 @@ class CoapResource(resource.Resource):
             
         return Message(code=Code.CHANGED)
 
-# If device does bot exist in HA it register here or at startup
+# If device does not exist in HA it register here or at startup
 class NewDeviceRegister(resource.Resource):
     def __init__(self, hass, entry):
         super().__init__()

@@ -16,7 +16,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class CoapSensor(SensorEntity):
     def __init__(self, device_id, vendor, sensor):
-        self._state = None
+        self._state = sensor.get("value")
         self._device_id = device_id
         self._vendor = vendor
         self._attr_device_class = sensor.get("type")
@@ -44,7 +44,7 @@ class CoapSensor(SensorEntity):
             )
         )
 
-    def _update_callback(self, value):
-        self._state = value
+    def _update_callback(self, sensor):
+        self._state = sensor.get("value")
         self.async_write_ha_state()
         
