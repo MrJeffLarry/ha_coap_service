@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 from aiocoap import *
 
 
@@ -15,10 +16,10 @@ async def main():
     payload = {
         "client_id": "device001",
         "sensors": [
-            {"type": "temperature", "value": 23.5},
-            {"type": "humidity", "value": 55},
-	        {"type": "battery", "value": 70},
-            {"type": "co2", "value": 810}
+            {"type": "temperature", "value": random.randint(19,25)},
+            {"type": "humidity", "value": random.randint(40,50)},
+	        {"type": "battery", "value": random.randint(70,80)},
+            {"type": "co2", "value": random.randint(500,900)}
         ]
     }
 
