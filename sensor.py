@@ -34,17 +34,19 @@ class CoapSensor(SensorEntity):
     @property
     def state(self):
         return self._state
-    
 
     async def async_added_to_hass(self):
         # Listen for updates specific to this instance
         self.async_on_remove(
             async_dispatcher_connect(
-                self.hass, f"{DOMAIN}_update_{self._attr_unique_id}", self._update_callback
+                self.hass, f"{DOMAIN}_update_{self._device_id}", self._update_callback
             )
         )
 
-    def _update_callback(self, sensor):
-        self._state = sensor.get("value")
-        self.async_write_ha_state()
+    def _update_callback(self, data):
+        for sensor in data.get("sensors"):
+            if sensor.get("type") == self._attr_device_class:
+                self._state = sensor.get("value")
+                self.async_write_ha_state()
+                break
         
