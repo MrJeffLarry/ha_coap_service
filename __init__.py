@@ -12,39 +12,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from .const import DOMAIN
+from .const import DOMAIN, CO_PENDING_DEVICES, CO_DEVICES
 
 _LOGGER = logging.getLogger(__name__)
-
-class TimeResource(resource.ObservableResource):
-    """Example resource that can be observed. The `notify` method keeps
-    scheduling itself, and calls `update_state` to trigger sending
-    notifications."""
-
-    def __init__(self):
-        super().__init__()
-
-        self.handle = None
-
-    def notify(self):
-        self.updated_state()
-        self.reschedule()
-
-    def reschedule(self):
-        self.handle = asyncio.get_running_loop().call_later(5, self.notify)
-
-    def update_observation_count(self, count):
-        if count and self.handle is None:
-            print("Starting the clock")
-            self.reschedule()
-        if count == 0 and self.handle:
-            print("Stopping the clock")
-            self.handle.cancel()
-            self.handle = None
-
-    async def render_get(self, request):
-        payload = datetime.datetime.now().strftime("%Y-%m-%d %H:%M").encode("ascii")
-        return Message(payload=payload, content_format=ContentFormat.TEXT)
 
 class WhoAmI(resource.Resource):
     def __init__(self, hass, entry):
@@ -121,27 +91,41 @@ def jsonPare(payload):
         return None, b"could not parse json"
 
 # If device does not exist in HA it register here or at startup
-class NewDeviceRegister(resource.Resource):
+class EndpointDevice(resource.Resource):
     def __init__(self, hass, entry):
         super().__init__()
         self.hass = hass
         self.entry = entry
 
+    # New device, get information about it and all its sensors to publich to HA
     async def render_put(self, request):
         data, err = jsonPare(request.payload)
         if err != None:
             return Message(code=Code.BAD_REQUEST, payload=err)
 
-        # 2. Extract the field safely
-        device_id = data.get('client_id')
+        device_id = data.get('device_id')
+#        manufactor = data.get('manufactor')
+#        sw_version = data.get('fw_version')
+#        hw_version = data.get('hw_version')
 
         if not device_id:
-            return Message(code=Code.BAD_REQUEST, payload=b"Missing client_id")
+            return Message(code=Code.BAD_REQUEST, payload=b"Missing device_id")
             
-        if device_id not in self.hass.data[DOMAIN][self.entry.entry_id]["discovered"]:
-            self.hass.data[DOMAIN][self.entry.entry_id]["discovered"].add(device_id)
-            # Tell sensor.py to add a new entity
-            async_dispatcher_send(self.hass, f"{DOMAIN}_new_device", data)
+        if device_id not in self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES]:
+            # Trigger Home Assistant config flow discovery
+            hass.async_create_task(
+                hass.config_entries.flow.async_init(
+                    DOMAIN,
+                    context={"source": "coap", "device_id":device_id},
+                    data=data
+                )
+            )
+            return aiocoap.Message(code=Code.CREATED) # or 2.04 if you want to swallow it temporarily
+            
+#        if device_id not in self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES]:
+#            self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES].add(device_id)
+#            # Tell sensor.py to add a new entity
+#            async_dispatcher_send(self.hass, f"{DOMAIN}_new_device", data)
         
         # Update existing entity
         async_dispatcher_send(self.hass, f"{DOMAIN}_update_{device_id}", data)
@@ -149,18 +133,39 @@ class NewDeviceRegister(resource.Resource):
         return Message(code=Code.CHANGED)
 
 # device send data to HA, send back register new device if not exist
-class DeviceData(resource.Resource):
+class EndpointDeviceData(resource.Resource):
     def __init__(self, hass, entry):
         super().__init__()
         self.hass = hass
         self.entry = entry
 
 # listen for device events from HA -> Device
-class DeviceObserveEntity(resource.Resource):
+class EndpointDeviceObserveEntity(resource.ObservableResource):
     def __init__(self, hass, entry):
         super().__init__()
         self.hass = hass
         self.entry = entry
+        self.handle = None
+
+    def notify(self):
+        self.updated_state()
+        self.reschedule()
+
+    def reschedule(self):
+        self.handle = asyncio.get_running_loop().call_later(5, self.notify)
+
+    def update_observation_count(self, count):
+        if count and self.handle is None:
+            print("Starting the clock")
+            self.reschedule()
+        if count == 0 and self.handle:
+            print("Stopping the clock")
+            self.handle.cancel()
+            self.handle = None
+
+    async def render_get(self, request):
+        payload = datetime.datetime.now().strftime("%Y-%m-%d %H:%M").encode("ascii")
+        return Message(payload=payload, content_format=ContentFormat.TEXT)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Load existing devices from Registry to avoid re-discovering them
@@ -174,6 +179,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Store it in hass.data so the sensor can read it
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "load_time": load_time,
+        CO_PENDING_DEVICES: [],
+        CO_DEVICES: known_devices,
         "discovered": known_devices,
         "instances": {}
     }
@@ -181,10 +188,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Setup CoAP Server
     root = resource.Site()
     root.add_resource(['whoami'], WhoAmI(hass, entry))
+    root.add_resource(['device'], EndpointDevice(hass, entry))
+    root.add_resource(['device', 'data'], EndpointDeviceData(hass, entry))
+    root.add_resource(['device', 'observe'], EndpointDeviceObserveEntity(hass, entry))
+
+    # Old
     root.add_resource(['sensors', 'data'], CoapResource(hass, entry))
-    # Register only the root path
     root.add_resource(['device'], TimeResource())
-    #root.add_resource(['sensors'], SensorRootResource(hass, entry))
 
     context = await Context.create_server_context(root, bind=('::', 5683))
     
