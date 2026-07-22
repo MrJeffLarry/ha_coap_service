@@ -14,7 +14,7 @@ async def main():
 
     # 2. Define the exact payload that matches your server expectations
     payload = {
-        "client_id": "device001",
+        "device_id": "device001",
         "sensors": [
             {"type": "temperature", "value": random.randint(19,25)},
             {"type": "humidity", "value": random.randint(40,50)},
@@ -26,13 +26,13 @@ async def main():
     # 3. Create the PUT request
     # NOTE: The path '/sensors/device001/data' matches your tree structure
     request = Message(
-        code=PUT, 
+        code=PUT,
         payload=json.dumps(payload).encode('utf-8')
     )
-    request.set_request_uri('coap://home.bas3.io:5683/sensors/data')
+    request.set_request_uri('coap://127.0.0.1:5683/device')
 
     print("Sending request...")
-    
+
     try:
         # 4. Send and wait for response
         response = await protocol.request(request).response
