@@ -1,9 +1,10 @@
 DOMAIN = "ha_coap_service"
-CONF_COAP = 'coapservices'
-CONF_PRINTERS = 'printertest'
+CONF_COAP = "coapservices"
+CONF_PRINTERS = "printertest"
 DEFAULT_PORT = 5683
-CO_DEVICES = 'devices'
-CO_PENDING_DEVICES = 'pending_devices'
-CO_DEVICE_ID = 'device_id'
-JSON_VALUE = 'value'
-JSON_TYPE = 'type'
+CO_DEVICES = "devices"
+CO_PENDING_DEVICES = "pending_devices"
+CO_PENDING_PAYLOADS = "pending_payloads"
+CO_DEVICE_ID = "device_id"
+JSON_VALUE = "value"
+JSON_TYPE = "type"

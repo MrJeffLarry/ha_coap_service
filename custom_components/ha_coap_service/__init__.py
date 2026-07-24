@@ -10,11 +10,19 @@ from aiocoap.numbers.codes import Code
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.components import persistent_notification
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from .const import DOMAIN, CO_PENDING_DEVICES, CO_DEVICES
+from .const import (
+    DOMAIN,
+    CO_PENDING_DEVICES,
+    CO_PENDING_PAYLOADS,
+    CO_DEVICES,
+    CO_DEVICE_ID,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class WhoAmI(resource.Resource):
     def __init__(self, hass, entry):
@@ -25,8 +33,12 @@ class WhoAmI(resource.Resource):
     async def render_get(self, request):
         _LOGGER.warning("Request: GET /WhoAmI")
         text = [f"Used protocol: {request.remote.scheme}."]
-        text.append(f"Last reload {self.hass.data[DOMAIN][self.entry.entry_id]["load_time"]}")
-        text.append(f"Devices {len(self.hass.data[DOMAIN][self.entry.entry_id]["discovered"])}")
+        text.append(
+            f"Last reload {self.hass.data[DOMAIN][self.entry.entry_id]['load_time']}"
+        )
+        text.append(
+            f"Devices {len(self.hass.data[DOMAIN][self.entry.entry_id]['discovered'])}"
+        )
 
         try:
             text.append(f"Request came from {request.remote.hostinfo}.")
@@ -47,6 +59,7 @@ class WhoAmI(resource.Resource):
             content_format=ContentFormat.TEXT,
         )
 
+
 # CoAP Resource handling
 class CoapResource(resource.Resource):
     def __init__(self, hass, entry):
@@ -65,7 +78,10 @@ class CoapResource(resource.Resource):
             if not device_id:
                 return Message(code=Code.BAD_REQUEST, payload=b"Missing client_id")
 
-            if device_id not in self.hass.data[DOMAIN][self.entry.entry_id]["discovered"]:
+            if (
+                device_id
+                not in self.hass.data[DOMAIN][self.entry.entry_id]["discovered"]
+            ):
                 self.hass.data[DOMAIN][self.entry.entry_id]["discovered"].add(device_id)
                 # Tell sensor.py to add a new entity
                 async_dispatcher_send(self.hass, f"{DOMAIN}_new_device", data)
@@ -73,11 +89,12 @@ class CoapResource(resource.Resource):
             # Update existing entity
             async_dispatcher_send(self.hass, f"{DOMAIN}_update_{device_id}", data)
 
-        except (json.JSONDecodeError, UnicodeDecodeError):
+        except json.JSONDecodeError, UnicodeDecodeError:
             # If the payload isn"t valid JSON
             return Message(code=Code.BAD_REQUEST, payload=b"Invalid JSON")
 
         return Message(code=Code.CHANGED)
+
 
 def jsonPare(payload):
     try:
@@ -85,9 +102,10 @@ def jsonPare(payload):
         raw_payload = payload.decode("utf-8")
         return json.loads(raw_payload), None
 
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except json.JSONDecodeError, UnicodeDecodeError:
         # If the payload isn"t valid JSON
         return None, b"could not parse json"
+
 
 # If device does not exist in HA it register here or at startup
 class EndpointDevice(resource.Resource):
@@ -103,33 +121,62 @@ class EndpointDevice(resource.Resource):
             return Message(code=Code.BAD_REQUEST, payload=err)
 
         device_id = data.get("device_id")
-#        manufactor = data.get("manufactor")
-#        sw_version = data.get("fw_version")
-#        hw_version = data.get("hw_version")
+        #        manufactor = data.get("manufactor")
+        #        sw_version = data.get("fw_version")
+        #        hw_version = data.get("hw_version")
 
         if not device_id:
             return Message(code=Code.BAD_REQUEST, payload=b"Missing device_id")
 
         if device_id not in self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES]:
+            pending_devices = self.hass.data[DOMAIN][self.entry.entry_id][
+                CO_PENDING_DEVICES
+            ]
+
+            if device_id in pending_devices:
+                return Message(code=Code.VALID)
+
+            pending_devices.append(device_id)
+            self.hass.data[DOMAIN][self.entry.entry_id][CO_PENDING_PAYLOADS][
+                device_id
+            ] = data
+            _LOGGER.info("Discovered new CoAP device awaiting approval: %s", device_id)
+            persistent_notification.async_create(
+                self.hass,
+                (
+                    f"CoAP device '{device_id}' is waiting for approval. "
+                    "Open Settings > Devices & Services > Integrations and check "
+                    "the Discovered section to approve it."
+                ),
+                title="CoAP Device Pending Approval",
+                notification_id=f"{DOMAIN}_pending_{device_id}",
+            )
+
             # Trigger Home Assistant config flow discovery
             self.hass.async_create_task(
                 self.hass.config_entries.flow.async_init(
                     DOMAIN,
-                    context={"source": "coap", "device_id":device_id},
-                    data=data
+                    context={"source": "integration_discovery", "device_id": device_id},
+                    data=data,
                 )
             )
-            return Message(code=Code.CREATED) # or 2.04 if you want to swallow it temporarily
+            _LOGGER.debug(
+                "Started CoAP config flow discovery for device_id=%s", device_id
+            )
+            return Message(
+                code=Code.CREATED
+            )  # or 2.04 if you want to swallow it temporarily
 
-#        if device_id not in self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES]:
-#            self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES].add(device_id)
-#            # Tell sensor.py to add a new entity
-#            async_dispatcher_send(self.hass, f"{DOMAIN}_new_device", data)
+        #        if device_id not in self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES]:
+        #            self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES].add(device_id)
+        #            # Tell sensor.py to add a new entity
+        #            async_dispatcher_send(self.hass, f"{DOMAIN}_new_device", data)
 
         # Update existing entity
         async_dispatcher_send(self.hass, f"{DOMAIN}_update_{device_id}", data)
 
         return Message(code=Code.CHANGED)
+
 
 # device send data to HA, send back register new device if not exist
 class EndpointDeviceData(resource.Resource):
@@ -137,6 +184,7 @@ class EndpointDeviceData(resource.Resource):
         super().__init__()
         self.hass = hass
         self.entry = entry
+
 
 # listen for device events from HA -> Device
 class EndpointDeviceObserveEntity(resource.ObservableResource):
@@ -166,12 +214,19 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         payload = datetime.datetime.now().strftime("%Y-%m-%d %H:%M").encode("ascii")
         return Message(payload=payload, content_format=ContentFormat.TEXT)
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Load existing devices from Registry to avoid re-discovering them
     registry = er.async_get(hass)
-    known_devices = {
-        entry.unique_id for entry in er.async_entries_for_config_entry(registry, entry.entry_id)
-    }
+    known_devices = set(entry.data.get(CO_DEVICES, []))
+    for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        unique_id = entity_entry.unique_id
+        prefix = f"{DOMAIN}_"
+        if unique_id and unique_id.startswith(prefix):
+            # unique_id format: <domain>_<device_id>_<sensor_type>
+            tail = unique_id[len(prefix) :]
+            if "_" in tail:
+                known_devices.add(tail.rsplit("_", 1)[0])
 
     load_time = datetime.datetime.now(datetime.timezone.utc)
 
@@ -179,10 +234,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "load_time": load_time,
         CO_PENDING_DEVICES: [],
+        CO_PENDING_PAYLOADS: {},
         CO_DEVICES: known_devices,
         "discovered": known_devices,
-        "instances": {}
+        "instances": {},
     }
+
+    async def _async_approve_device(call):
+        device_id = call.data.get(CO_DEVICE_ID) or call.data.get("client_id")
+        if not device_id:
+            _LOGGER.warning("approve_device service called without device_id")
+            return
+
+        runtime_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        if not runtime_data:
+            _LOGGER.warning("approve_device called but runtime data not available")
+            return
+
+        approved_devices = list(entry.data.get(CO_DEVICES, []))
+        if device_id not in approved_devices:
+            approved_devices.append(device_id)
+
+        hass.config_entries.async_update_entry(
+            entry,
+            data={
+                **entry.data,
+                CO_DEVICES: approved_devices,
+            },
+        )
+
+        runtime_data[CO_DEVICES].add(device_id)
+        runtime_data["discovered"].add(device_id)
+        if device_id in runtime_data[CO_PENDING_DEVICES]:
+            runtime_data[CO_PENDING_DEVICES].remove(device_id)
+
+        payload = runtime_data[CO_PENDING_PAYLOADS].pop(
+            device_id, {CO_DEVICE_ID: device_id}
+        )
+        async_dispatcher_send(hass, f"{DOMAIN}_new_device", payload)
+        async_dispatcher_send(hass, f"{DOMAIN}_update_{device_id}", payload)
+        persistent_notification.async_dismiss(hass, f"{DOMAIN}_pending_{device_id}")
+        _LOGGER.info("CoAP device approved via service: %s", device_id)
+
+    if not hass.services.has_service(DOMAIN, "approve_device"):
+        hass.services.async_register(DOMAIN, "approve_device", _async_approve_device)
 
     # Setup CoAP Server
     root = resource.Site()
@@ -192,8 +287,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     root.add_resource(["device", "observe"], EndpointDeviceObserveEntity(hass, entry))
 
     # Old
-#    root.add_resource(["sensors", "data"], CoapResource(hass, entry))
-#    root.add_resource(["device"], TimeResource())
+    #    root.add_resource(["sensors", "data"], CoapResource(hass, entry))
+    #    root.add_resource(["device"], TimeResource())
 
     context = await Context.create_server_context(root, bind=("127.0.0.1", 5683))
 
@@ -213,17 +308,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
         if coap_context:
             await coap_context.shutdown()  # This is the critical cleanup step
 
+        if hass.services.has_service(DOMAIN, "approve_device"):
+            hass.services.async_remove(DOMAIN, "approve_device")
+
         # 3. Clean up hass.data
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
-
-
-
-
-
-
-
-
-
-

@@ -2,17 +2,22 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from .const import DOMAIN
 
+
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    
+
     # Callback to dynamically add new entities
     async def _add_new_device(data):
-        device_id = data.get("client_id")
+        device_id = data.get("device_id") or data.get("client_id")
+        if not device_id:
+            return
+
         new_entities = []
-        for sensor in data.get("sensors"):
+        for sensor in data.get("sensors", []):
             new_entities.append(CoapSensor(device_id, "hagerman", sensor))
         async_add_entities(new_entities)
 
     async_dispatcher_connect(hass, f"{DOMAIN}_new_device", _add_new_device)
+
 
 class CoapSensor(SensorEntity):
     def __init__(self, device_id, vendor, sensor):
@@ -26,7 +31,9 @@ class CoapSensor(SensorEntity):
     @property
     def device_info(self):
         return {
-            "identifiers": {(DOMAIN, self._device_id)}, # Same identifier = Same Device Group
+            "identifiers": {
+                (DOMAIN, self._device_id)
+            },  # Same identifier = Same Device Group
             "name": f"CoAP Device {self._device_id}",
             "manufacturer": self._vendor,
         }
@@ -49,4 +56,3 @@ class CoapSensor(SensorEntity):
                 self._state = sensor.get("value")
                 self.async_write_ha_state()
                 break
-        
