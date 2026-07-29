@@ -1,8 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from ha_coap_service.sensor import async_setup_entry, CoapSensor
-from ha_coap_service.const import DOMAIN
 from conftest import MockConfigEntry
+from ha_coap_service.const import DOMAIN
+from ha_coap_service.sensor import CoapSensor, async_setup_entry
 
 
 @pytest.mark.asyncio
@@ -20,7 +21,9 @@ async def test_sensor_setup_entry():
         if signal == f"{DOMAIN}_new_device":
             dispatcher_callback = target
 
-    with patch("ha_coap_service.sensor.async_dispatcher_connect", side_effect=mock_connect):
+    with patch(
+        "ha_coap_service.sensor.async_dispatcher_connect", side_effect=mock_connect
+    ):
         await async_setup_entry(hass, entry, async_add_entities)
 
     assert dispatcher_callback is not None
@@ -28,10 +31,7 @@ async def test_sensor_setup_entry():
     # Call the callback with dummy data
     device_data = {
         "client_id": "test_device_1",
-        "sensors": [
-            {"type": "temperature"},
-            {"type": "humidity"}
-        ]
+        "sensors": [{"type": "temperature"}, {"type": "humidity"}],
     }
     await dispatcher_callback(device_data)
 

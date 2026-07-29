@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from ha_coap_service.config_flow import CoapFlowHandler
 from ha_coap_service.const import DOMAIN
 

@@ -1,13 +1,12 @@
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-
-from aiocoap.numbers.codes import Code
 from aiocoap import Message
-
+from aiocoap.numbers.codes import Code
+from conftest import MockConfigEntry
 from ha_coap_service import async_setup_entry, async_unload_entry
 from ha_coap_service.const import DOMAIN
-from conftest import MockConfigEntry
 
 
 @pytest.mark.asyncio
@@ -37,7 +36,9 @@ async def test_async_setup_entry(mock_create_server_context):
     # Verify server context creation was called
     mock_create_server_context.assert_called_once()
     # Verify forward platform was called
-    hass.config_entries.async_forward_entry_setups.assert_called_once_with(entry, ["sensor"])
+    hass.config_entries.async_forward_entry_setups.assert_called_once_with(
+        entry, ["sensor"]
+    )
 
 
 @pytest.mark.asyncio
@@ -50,13 +51,7 @@ async def test_async_unload_entry():
     # Setup mock hass and entry
     hass = MagicMock()
     entry = MockConfigEntry(entry_id="test_entry_id")
-    hass.data = {
-        DOMAIN: {
-            entry.entry_id: {
-                "coap_context": mock_context
-            }
-        }
-    }
+    hass.data = {DOMAIN: {entry.entry_id: {"coap_context": mock_context}}}
 
     # Mock unload_platforms to return True
     hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
@@ -72,8 +67,9 @@ async def test_async_unload_entry():
 @pytest.mark.asyncio
 async def test_whoami_resource():
     """Test WhoAmI resource render_get."""
-    from ha_coap_service import WhoAmI
     import datetime
+
+    from ha_coap_service import WhoAmI
 
     hass = MagicMock()
     entry = MockConfigEntry(entry_id="test_entry_id")
@@ -82,7 +78,7 @@ async def test_whoami_resource():
         DOMAIN: {
             entry.entry_id: {
                 "load_time": load_time,
-                "discovered": {"device1", "device2"}
+                "discovered": {"device1", "device2"},
             }
         }
     }
@@ -113,13 +109,7 @@ async def test_coap_resource_render_put_new_device(mock_dispatcher_send):
     hass = MagicMock()
     entry = MockConfigEntry(entry_id="test_entry_id")
     discovered = set()
-    hass.data = {
-        DOMAIN: {
-            entry.entry_id: {
-                "discovered": discovered
-            }
-        }
-    }
+    hass.data = {DOMAIN: {entry.entry_id: {"discovered": discovered}}}
 
     resource = CoapResource(hass, entry)
 
@@ -130,7 +120,7 @@ async def test_coap_resource_render_put_new_device(mock_dispatcher_send):
     response = await resource.render_put(request)
     assert response.code == Code.CHANGED
     assert "new_device" in discovered
-    
+
     # Verify both new_device and update dispatchers were sent
     mock_dispatcher_send.assert_any_call(hass, f"{DOMAIN}_new_device", payload)
     mock_dispatcher_send.assert_any_call(hass, f"{DOMAIN}_update_new_device", payload)
@@ -145,13 +135,7 @@ async def test_coap_resource_render_put_existing_device(mock_dispatcher_send):
     hass = MagicMock()
     entry = MockConfigEntry(entry_id="test_entry_id")
     discovered = {"existing_device"}
-    hass.data = {
-        DOMAIN: {
-            entry.entry_id: {
-                "discovered": discovered
-            }
-        }
-    }
+    hass.data = {DOMAIN: {entry.entry_id: {"discovered": discovered}}}
 
     resource = CoapResource(hass, entry)
 
@@ -162,9 +146,11 @@ async def test_coap_resource_render_put_existing_device(mock_dispatcher_send):
     response = await resource.render_put(request)
     assert response.code == Code.CHANGED
     assert "existing_device" in discovered
-    
+
     # Verify only update dispatcher was sent, not new_device
-    mock_dispatcher_send.assert_called_once_with(hass, f"{DOMAIN}_update_existing_device", payload)
+    mock_dispatcher_send.assert_called_once_with(
+        hass, f"{DOMAIN}_update_existing_device", payload
+    )
 
 
 @pytest.mark.asyncio
@@ -174,13 +160,7 @@ async def test_coap_resource_render_put_invalid_payload():
 
     hass = MagicMock()
     entry = MockConfigEntry(entry_id="test_entry_id")
-    hass.data = {
-        DOMAIN: {
-            entry.entry_id: {
-                "discovered": set()
-            }
-        }
-    }
+    hass.data = {DOMAIN: {entry.entry_id: {"discovered": set()}}}
 
     resource = CoapResource(hass, entry)
 

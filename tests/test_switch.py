@@ -1,8 +1,8 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from ha_coap_service.switch import CoapSwitch
 from ha_coap_service.const import DOMAIN
-from aiocoap.numbers.codes import Code
+from ha_coap_service.switch import CoapSwitch
 
 
 def test_coap_switch_init():
@@ -79,7 +79,7 @@ async def test_send_coap_command_success(mock_create_client_context):
     # Mock CoAP protocol context
     mock_protocol = MagicMock()
     mock_request_instance = MagicMock()
-    
+
     # We mock the sequence: protocol.request(request).response
     response_future = AsyncMock()
     mock_response = MagicMock()
@@ -88,7 +88,7 @@ async def test_send_coap_command_success(mock_create_client_context):
     mock_create_client_context.return_value = mock_protocol
 
     switch = CoapSwitch("device_123", "fd00::1234")
-    
+
     # Execute the send command
     await switch._send_coap_command("ON")
 
@@ -106,7 +106,7 @@ async def test_send_coap_command_failure(mock_create_client_context):
     mock_create_client_context.return_value = mock_protocol
 
     switch = CoapSwitch("device_123", "fd00::1234")
-    
+
     # Execute the send command should not raise any exceptions
     await switch._send_coap_command("ON")
 
