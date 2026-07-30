@@ -3,6 +3,8 @@ import datetime
 import json
 import logging
 
+from dataclasses import dataclass
+
 from aiocoap import Context, Message, error, resource
 from aiocoap.numbers.codes import Code
 from aiocoap.numbers.contentformat import ContentFormat
@@ -12,6 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_TEMPERATURE,
@@ -22,6 +25,8 @@ from homeassistant.const import (
     CONF_USERNAME,
     Platform,
 )
+
+from .coordinator import ExampleCoordinator
 
 from .const import (
     CO_DEVICE_ID,
@@ -43,6 +48,15 @@ PLATFORMS = [
     # Platform.SWITCH,
     # Platform.WATER_HEATER,
 ]
+
+type MyConfigEntry = ConfigEntry[RuntimeData]
+
+
+@dataclass
+class RuntimeData:
+    """Class to hold your data."""
+
+    coordinator: DataUpdateCoordinator
 
 
 class WhoAmI(resource.Resource):
@@ -194,6 +208,17 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+
+
+    # Initialise the coordinator that manages data updates from your api.
+    # This is defined in coordinator.py
+    coordinator = ExampleCoordinator(hass, entry)
+
+    # Perform an initial data load from api.
+    # async_config_entry_first_refresh() is special in that it does not log errors if it fails
+    await coordinator.async_config_entry_first_refresh()
+
+
     # Load existing devices from Registry to avoid re-discovering them
     registry = er.async_get(hass)
     known_devices = set(entry.data.get(CO_DEVICES, []))
