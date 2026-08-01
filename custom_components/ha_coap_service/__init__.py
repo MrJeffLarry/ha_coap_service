@@ -91,6 +91,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # This can be done here but included in a seperate file for ease of reading.
     # See also light.py for entity services examples
     # ----------------------------------------------------------------------------
+    # Initialize shared hass.data store for this entry
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        "load_time": datetime.datetime.now(datetime.UTC),
+        CO_PENDING_DEVICES: [],
+        CO_PENDING_PAYLOADS: {},
+        CO_DEVICES: set(),
+        "discovered": set(),
+        "instances": {},
+    }
+
     service = CoAPServiceSetup(hass, entry)
     hass.data[DOMAIN][entry.entry_id][COAP_CONTEXT] = await service.setup_services()
 

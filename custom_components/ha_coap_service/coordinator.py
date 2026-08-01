@@ -13,13 +13,11 @@ from homeassistant.const import (
 #    CONF_USERNAME,
 )
 from homeassistant.core import DOMAIN, HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-#from .api import API, APIAuthError, Device, DeviceType
-#from .const import DEFAULT_SCAN_INTERVAL
+from .api import Device, DeviceType
 
 _LOGGER = logging.getLogger(__name__)
-
 
 @dataclass
 class APIData:
@@ -47,43 +45,37 @@ class DataCoordinator(DataUpdateCoordinator):
 #            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
 #        )
 
-        # Initialise DataUpdateCoordinator
+        # Initialise DataUpdateCoordinator (push-based: no polling interval)
         super().__init__(
             hass,
             _LOGGER,
             name=f"{DOMAIN} ({config_entry.unique_id})",
-            # Method to call on every update interval.
-#            update_method=self.async_update_data,
-            # Polling interval. Will only be polled if there are subscribers.
-            # Using config option here but you can just use a value.
-#            update_interval=timedelta(seconds=self.poll_interval),
         )
 
-        # Initialise your api here
-        # self.api = API(host=self.host, user=self.user, pwd=self.pwd)
+        # Seed with empty data so async_config_entry_first_refresh() succeeds
+        #self.async_set_updated_data(APIData(controller_name="ha_coap_service", devices=[]))
 
+    def push_device_data(self, device: Device) -> bool:
+        """Called by the CoAP API to push updated device data into the coordinator.
 
-    async def async_update_data(self, devices):
-        """Fetch data from API endpoint.
-
-        This is the place to pre-process the data to lookup tables
-        so entities can quickly look up their data.
+        This triggers all subscribed entities to refresh their state.
         """
-        try:
-            if not self.api.connected:
-                await self.hass.async_add_executor_job(self.api.connect)
-            devices = await self.hass.async_add_executor_job(self.api.get_devices)
-        except APIAuthError as err:
-            _LOGGER.error(err)
-            raise UpdateFailed(err) from err
-        except Exception as err:
-            # This will show entities as unavailable by raising UpdateFailed exception
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
+        devices = self.data.devices if self.data else []
+        found = False
+        # Update the device in the list if it exists, otherwise add it
+        for i, existing_device in enumerate(devices):
+            if (
+                existing_device.device_type == device.device_type
+                and existing_device.device_id == device.device_id
+            ):
+                devices[i] = device
+                found = True
+                break
+            else:
+                devices.append(device)
+        self.async_set_updated_data(APIData(controller_name="ha_coap_service", devices=devices))
+        return found
 
-        # What is returned here is stored in self.data by the DataUpdateCoordinator
-        return ExampleAPIData(self.api.controller_name, devices)
-
-  
 
     def get_device_by_id(
         self, device_type: DeviceType, device_id: int

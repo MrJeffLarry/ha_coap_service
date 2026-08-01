@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 
+from homeassistant.helpers.template import states
 import voluptuous as vol
 
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from aiocoap.numbers.contentformat import ContentFormat
 from aiocoap.resource import ObservableResource, Resource
 from homeassistant.helpers import entity_registry as er
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_DEVICE_ID, ATTR_NAME, CONF_PORT
+from homeassistant.const import ATTR_DEVICE_ID, ATTR_NAME, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -36,6 +37,13 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+class SensorType(StrEnum):
+    """Sensor types."""
+
+    TEMP_SENSOR = "temp_sensor"
+    DOOR_SENSOR = "door_sensor"
+    OTHER = "other"
+
 class DeviceType(StrEnum):
     """Device types."""
 
@@ -43,15 +51,24 @@ class DeviceType(StrEnum):
     DOOR_SENSOR = "door_sensor"
     OTHER = "other"
 
+class Sensor:
+    """Device sensor."""
+
+    name: str
+    type: SensorType
+    state: int | bool
+
 @dataclass
 class Device:
     """API device."""
 
     device_id: int
     device_unique_id: str
-    device_type: DeviceType
-    name: str
-    state: int | bool
+    manufacturer: str = "hagerman"
+    sw_version: str = "1.0.0"
+    hw_version: str = "1.0.0"
+    device_type: DeviceType = DeviceType.OTHER
+    sensors: list[Sensor] = []
 
 class CoAPServiceSetup:
     """Class to handle Integration Services."""
@@ -63,32 +80,7 @@ class CoAPServiceSetup:
         self.coordinator: DataCoordinator = config_entry.runtime_data.coordinator
 
     async def setup_services(self) -> Context:
-        """Initialise the services in Hass."""
-        # Load existing devices from Registry to avoid re-discovering them
-#        registry = er.async_get(self.hass)
-#        known_devices = set(self.config_entry.data.get(CO_DEVICES, []))
-#        for entity_entry in er.async_entries_for_config_entry(registry, self.config_entry.entry_id):
-#            unique_id = entity_entry.unique_id
-#            prefix = f"{DOMAIN}_"
-#            if unique_id and unique_id.startswith(prefix):
-#                # unique_id format: <domain>_<device_id>_<sensor_type>
-#                tail = unique_id[len(prefix) :]
-#                if "_" in tail:
-#                    known_devices.add(tail.rsplit("_", 1)[0])
-
-#        load_time = datetime.datetime.now(datetime.UTC)
-
-        # Store it in hass.data so the sensor can read it
-#        self.hass.data.setdefault(DOMAIN, {})[self.config_entry.entry_id] = {
-#            "load_time": load_time,
-#            CO_PENDING_DEVICES: [],
-#            CO_PENDING_PAYLOADS: {},
-#            CO_DEVICES: known_devices,
-#            "discovered": known_devices,
-#            "instances": {},
-#        }
-
-        # Setup CoAP Server
+        """Setup CoAP server and register services."""
         root = resource.Site()
         root.add_resource(["whoami"], WhoAmI(self.hass, self.config_entry))
         root.add_resource(["device"], EndpointDevice(self.hass, self.config_entry))
@@ -106,7 +98,8 @@ class WhoAmI(resource.Resource):
         self.hass = hass
         self.entry = entry
 
-    async def render_get(self, request):
+    async def render_get(self, request) -> Message:
+        """Get information about the CoAP server and the request."""
         _LOGGER.warning("Request: GET /WhoAmI")
         text = [f"Used protocol: {request.remote.scheme}."]
         text.append(
@@ -136,27 +129,28 @@ class WhoAmI(resource.Resource):
         )
 
 def jsonPare(payload):
+    device: Device = Device(device_id=0, device_unique_id="")
+
     try:
         # 1. Decode bytes to string and parse JSON
         raw_payload = payload.decode("utf-8")
         data = json.loads(raw_payload)
+        device.device_id = data.get("device_id", None)
+        device.device_unique_id = f"{device.device_id}_{data.get('device_type', 'other')}"
+        device.device_type = DeviceType(data.get("device_type", "other"))
+        device.manufacturer = data.get("manufacturer", "hagerman")
+        device.sw_version = data.get("sw_version", "1.0.0")
+        device.hw_version = data.get("hw_version", "1.0.0")
+        device.sensors = data.get("sensors", [])
 
-        device = {
-            "id": data.get("device_id", None),
-            "manufacturer": data.get("manufacturer", "hagerman"),
-            "sw_version": data.get("sw_version", "1.0.0"),
-            "hw_version": data.get("hw_version", "1.0.0"),
-            "sensors": data.get("sensors", []),
-        }
-
-        if device[ID] == None:
-            return None, b"Missing device_id in payload"
-
-        return device, None
+        if device.device_id == None:
+            return device, b"Missing device_id in payload"
+        else:
+            return device, None
 
     except json.JSONDecodeError, UnicodeDecodeError:
         # If the payload isn"t valid JSON
-        return None, b"could not parse json"
+        return device, b"could not parse json"
 
 
 # If device does not exist in HA it register here or at startup
@@ -172,25 +166,13 @@ class EndpointDevice(resource.Resource):
         if err != None or device == None:
             return Message(code=Code.BAD_REQUEST, payload=err)
 
-        if device[ID] not in self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES]:
-            pending_devices = self.hass.data[DOMAIN][self.entry.entry_id][
-                CO_PENDING_DEVICES
-            ]
+        # Also push updated data into the DataCoordinator so CoordinatorEntity
+        # sensors (DeviceSensor) pick up the new state.
+        coordinator: DataCoordinator = self.entry.runtime_data.coordinator
 
-            if device[ID] in pending_devices:
-                return Message(code=Code.VALID)
+        coordinator.push_device_data(device)
 
-            self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES].add(device[ID])
-            # Tell sensor.py to add a new entity
-            async_dispatcher_send(self.hass, f"{DOMAIN}_new_device", device)
-
-            return Message(
-                code=Code.CREATED
-            )  # or 2.04 if you want to swallow it temporarily
-
-        # Update existing entity
-        async_dispatcher_send(self.hass, f"{DOMAIN}_update_{device[ID]}", device)
-
+        return Message(code=Code.CREATED)  # or 2.04 if you want to swallow it temporarily
         return Message(code=Code.CHANGED)
 
 
@@ -203,18 +185,44 @@ class EndpointDeviceData(resource.Resource):
 
     async def render_put(self, request):
         device, err = jsonPare(request.payload)
-        if err != None:
-            return Message(code=Code.BAD_REQUEST, payload=err)
+        if err is not None or device is None:
+            return Message(code=Code.BAD_REQUEST, payload=err or b"invalid payload")
 
         if device[ID] not in self.hass.data[DOMAIN][self.entry.entry_id][CO_DEVICES]:
-            pending_devices = self.hass.data[DOMAIN][self.entry.entry_id][
-                CO_PENDING_DEVICES
-            ]
-
             return Message(code=Code.UNAUTHORIZED)
 
-        # Update existing entity
-        async_dispatcher_send(self.hass, f"{DOMAIN}_update_{device[ID]}", device)
+        # Dispatch update to CoapSensor entities (dynamic, dispatcher-based)
+#        async_dispatcher_send(self.hass, f"{DOMAIN}_update_{device[ID]}", device)
+
+        # Also push updated data into the DataCoordinator so CoordinatorEntity
+        # sensors (DeviceSensor) pick up the new state.
+        coordinator: DataCoordinator = self.entry.runtime_data.coordinator
+        current_devices = list(coordinator.data.devices)
+
+        # Build Device objects from the incoming sensor payload
+        for sensor in device.get("sensors", []):
+            sensor_type = sensor.get("type", "other")
+            try:
+                device_type = DeviceType(sensor_type)
+            except ValueError:
+                device_type = DeviceType.OTHER
+
+            updated = Device(
+                device_id=device[ID],
+                device_unique_id=f"{device[ID]}_{sensor_type}",
+                device_type=device_type,
+                name=f"{device[ID]} {sensor_type}",
+                state=sensor.get("value", 0),
+            )
+
+            # Replace existing entry for this device+type, or append
+            current_devices = [
+                d for d in current_devices
+                if not (d.device_id == device[ID] and d.device_type == device_type)
+            ]
+            current_devices.append(updated)
+
+        coordinator.push_device_data(current_devices)
 
         return Message(code=Code.CHANGED)
 
