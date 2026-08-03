@@ -51,6 +51,7 @@ from typing import Any, override
 import aiohttp
 import voluptuous as vol
 
+from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_TOKEN, CONF_USERNAME, CONF_PORT
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -76,6 +77,7 @@ LOCAL_API_SCHEMA = vol.Schema(
     }
 )
 
+@config_entries.HANDLERS.register(DOMAIN)
 class CoAPServiceConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1

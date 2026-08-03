@@ -1,0 +1,19 @@
+{
+  "domain": "coap_server",
+  "name": "CoAP Server",
+  "codeowners": [
+    "@mrjefflarry"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/mrjefflarry/ha-coap-server",
+  "homekit": {},
+  "iot_class": "local_push",
+  "requirements": [
+    "aiocoap"
+  ],
+  "single_config_entry": false,
+  "ssdp": [],
+  "version": "1.0.1",
+  "zeroconf": []
+}

@@ -19,7 +19,7 @@ from .const import (
     DOMAIN, SENSORS, ID, MANUFACTURER, SW_VERSION, HW_VERSION, JSON_TYPE, JSON_VALUE
 )
 from . import AppConfigEntry
-from .api import Device, DeviceType
+from .models import Device, DeviceType, Sensor
 from .coordinator import DataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,11 +38,12 @@ async def async_setup_entry(
     # Enumerate all the sensors in your data value from your DataUpdateCoordinator and add an instance of your sensor class
     # to a list for each one.
     # This maybe different in your specific case, depending on how your data is structured
-    sensors = [
-        DeviceSensor(coordinator, device)
-        for device in coordinator.data.devices
-        if device.device_type == DeviceType.TEMP_SENSOR
-    ]
+    sensors = []
+
+    for device in coordinator.data.devices:
+        _LOGGER.info("Setting up sensors for device: %s", device.device_id)
+        for sensor in device.sensors:
+            sensors.append(DeviceSensor(coordinator, device, sensor))
 
     # Create the sensors.
     async_add_entities(sensors)
@@ -71,11 +72,15 @@ async def async_setup_entry(
 class DeviceSensor(CoordinatorEntity, SensorEntity):
     """Implementation of a sensor."""
 
-    def __init__(self, coordinator: DataCoordinator, device: Device) -> None:
+    def __init__(self, coordinator: DataCoordinator, device: Device, sensor: Sensor) -> None:
         """Initialise sensor."""
         super().__init__(coordinator)
         self.device = device
         self.device_id = device.device_id
+        self.sensor = sensor
+        self._attr_device_class = sensor.type
+        self._state = sensor.state
+        self.coordinator = coordinator
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -88,12 +93,6 @@ class DeviceSensor(CoordinatorEntity, SensorEntity):
         self.async_write_ha_state()
 
     @property
-    def device_class(self) -> str:
-        """Return device class."""
-        # https://developers.home-assistant.io/docs/core/entity/sensor/#available-device-classes
-        return SensorDeviceClass.TEMPERATURE
-
-    @property
     def device_info(self) -> DeviceInfo:
         """Return device information."""
         # Identifiers are what group entities into the same device.
@@ -101,9 +100,9 @@ class DeviceSensor(CoordinatorEntity, SensorEntity):
         # If your device connects via another device, add via_device parameter with the indentifiers of that device.
         return DeviceInfo(
             name=f"ExampleDevice{self.device.device_id}",
-            manufacturer="ACME Manufacturer",
-            model="Door&Temp v1",
-            sw_version="1.0",
+            manufacturer=self.device.manufacturer,
+            model=self.device.model,
+            sw_version=self.device.sw_version,
             identifiers={
                 (
                     DOMAIN,
@@ -111,29 +110,6 @@ class DeviceSensor(CoordinatorEntity, SensorEntity):
                 )
             },
         )
-
-    @property
-    def name(self) -> str:
-        """Return the name of the sensor."""
-        return self.device.name
-
-    @property
-    def native_value(self) -> int | float:
-        """Return the state of the entity."""
-        # Using native value and native unit of measurement, allows you to change units
-        # in Lovelace and HA will automatically calculate the correct value.
-        return float(self.device.state)
-
-    @property
-    def native_unit_of_measurement(self) -> str | None:
-        """Return unit of temperature."""
-        return UnitOfTemperature.CELSIUS
-
-    @property
-    def state_class(self) -> str | None:
-        """Return state class."""
-        # https://developers.home-assistant.io/docs/core/entity/sensor/#available-state-classes
-        return SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self) -> str:

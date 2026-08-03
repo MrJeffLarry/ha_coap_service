@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 import logging
+from typing import override
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -15,7 +16,7 @@ from homeassistant.const import (
 from homeassistant.core import DOMAIN, HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .api import Device, DeviceType
+from .models import Device, DeviceType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,15 +31,16 @@ class APIData:
 class DataCoordinator(DataUpdateCoordinator):
     """My example coordinator."""
 
-    data: APIData
+    data: APIData # pyright: ignore[reportIncompatibleVariableOverride]
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize coordinator."""
 
         # Set variables from values entered in config flow setup
         self.port = config_entry.data[CONF_PORT]
-        self.host = config_entry.data[CONF_HOST]
-        self.pwd = config_entry.data[CONF_PASSWORD]
+        self.name = "Data Coordinator"
+#        self.host = config_entry.data[CONF_HOST]
+#        self.pwd = config_entry.data[CONF_PASSWORD]
 
         # set variables from options.  You need a default here incase options have not been set
 #        self.poll_interval = config_entry.options.get(
@@ -50,10 +52,18 @@ class DataCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=f"{DOMAIN} ({config_entry.unique_id})",
+            always_update=False,
         )
 
         # Seed with empty data so async_config_entry_first_refresh() succeeds
-        #self.async_set_updated_data(APIData(controller_name="ha_coap_service", devices=[]))
+        self.async_set_updated_data(
+            data=APIData(controller_name="ha_coap_service", devices=[]) # pyright: ignore[reportArgumentType]
+        )
+
+    async def _async_update_data(self) -> APIData: # pyright: ignore[reportIncompatibleMethodOverride]
+        """Fetch data from CoAP nodes if needed."""
+        # Must return an instance of APIData here
+        return self.data
 
     def push_device_data(self, device: Device) -> bool:
         """Called by the CoAP API to push updated device data into the coordinator.
@@ -66,14 +76,28 @@ class DataCoordinator(DataUpdateCoordinator):
         for i, existing_device in enumerate(devices):
             if (
                 existing_device.device_type == device.device_type
-                and existing_device.device_id == device.device_id
+                and existing_device.device_unique_id == device.device_unique_id
             ):
                 devices[i] = device
                 found = True
+                _LOGGER.info(
+                    "Updated device data for %s %s",
+                    device.device_type,
+                    device.device_unique_id,
+                )
                 break
-            else:
-                devices.append(device)
-        self.async_set_updated_data(APIData(controller_name="ha_coap_service", devices=devices))
+
+        if not found:
+            _LOGGER.info(
+                "Adding new device data for %s %s",
+                device.device_type,
+                device.device_unique_id,
+            )
+            devices.append(device)
+
+        self.async_set_updated_data(
+            APIData(controller_name="ha_coap_service", devices=devices) # pyright: ignore[reportArgumentType]
+        )
         return found
 
 

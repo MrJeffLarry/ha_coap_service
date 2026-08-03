@@ -26,15 +26,11 @@ from .coordinator import DataCoordinator
 from .api import CoAPServiceSetup
 
 from .const import (
-    CO_DEVICE_ID,
     CO_DEVICES,
     CO_PENDING_DEVICES,
     CO_PENDING_PAYLOADS,
     COAP_CONTEXT,
     DOMAIN,
-    HW_VERSION,
-    ID,
-    SW_VERSION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,9 +52,8 @@ class RuntimeData:
 
     coordinator: DataUpdateCoordinator
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
-
-
+async def async_setup_entry(hass: HomeAssistant, entry: AppConfigEntry):
+    """Set up your integration using UI."""
     # Initialise the coordinator that manages data updates from your api.
     # This is defined in coordinator.py
     coordinator = DataCoordinator(hass, entry)
@@ -94,11 +89,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Initialize shared hass.data store for this entry
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "load_time": datetime.datetime.now(datetime.UTC),
-        CO_PENDING_DEVICES: [],
-        CO_PENDING_PAYLOADS: {},
-        CO_DEVICES: set(),
-        "discovered": set(),
-        "instances": {},
     }
 
     service = CoAPServiceSetup(hass, entry)
@@ -107,7 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     return True
 
 
-async def _async_update_listener(hass: HomeAssistant, config_entry):
+async def _async_update_listener(hass: HomeAssistant, config_entry) -> None:
     """Handle config options update."""
     # Reload the integration when the options change.
     await hass.config_entries.async_reload(config_entry.entry_id)
