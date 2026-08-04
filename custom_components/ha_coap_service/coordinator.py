@@ -28,10 +28,8 @@ class APIData:
     devices: list[Device]
 
 
-class DataCoordinator(DataUpdateCoordinator):
+class DataCoordinator(DataUpdateCoordinator[APIData]):
     """My example coordinator."""
-
-    data: APIData # pyright: ignore[reportIncompatibleVariableOverride]
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize coordinator."""
@@ -57,7 +55,7 @@ class DataCoordinator(DataUpdateCoordinator):
 
         # Seed with empty data so async_config_entry_first_refresh() succeeds
         self.async_set_updated_data(
-            data=APIData(controller_name="ha_coap_service", devices=[]) # pyright: ignore[reportArgumentType]
+            APIData(controller_name="ha_coap_service", devices=[])
         )
 
     async def _async_update_data(self) -> APIData: # pyright: ignore[reportIncompatibleMethodOverride]
@@ -66,39 +64,39 @@ class DataCoordinator(DataUpdateCoordinator):
         return self.data
 
     def push_device_data(self, device: Device) -> bool:
-        """Called by the CoAP API to push updated device data into the coordinator.
+        """Push updated device data into the coordinator.
 
-        This triggers all subscribed entities to refresh their state.
+        Replaces an existing entry with the same unique id, or appends if new.
+        Returns True if the device already existed, False if it was newly added.
         """
-        devices = self.data.devices if self.data else []
-        found = False
-        # Update the device in the list if it exists, otherwise add it
-        for i, existing_device in enumerate(devices):
+        # Work on an explicit copy so self.data.devices is never mutated in place
+        devices: list[Device] = list(self.data.devices)
+        for i, existing in enumerate(devices):
             if (
-                existing_device.device_type == device.device_type
-                and existing_device.device_unique_id == device.device_unique_id
+                existing.device_type == device.device_type
+                and existing.device_unique_id == device.device_unique_id
             ):
                 devices[i] = device
-                found = True
                 _LOGGER.info(
                     "Updated device data for %s %s",
                     device.device_type,
                     device.device_unique_id,
                 )
-                break
+                self.async_set_updated_data(
+                    APIData(controller_name="ha_coap_service", devices=devices)
+                )
+                return True
 
-        if not found:
-            _LOGGER.info(
-                "Adding new device data for %s %s",
-                device.device_type,
-                device.device_unique_id,
-            )
-            devices.append(device)
-
-        self.async_set_updated_data(
-            APIData(controller_name="ha_coap_service", devices=devices) # pyright: ignore[reportArgumentType]
+        _LOGGER.info(
+            "Adding new device data for %s %s",
+            device.device_type,
+            device.device_unique_id,
         )
-        return found
+        devices.append(device)
+        self.async_set_updated_data(
+            APIData(controller_name="ha_coap_service", devices=devices)
+        )
+        return False
 
 
     def get_device_by_id(

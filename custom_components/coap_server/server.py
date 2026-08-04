@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.components.sensor import SensorDeviceClass
 
 from .models import CoAPDevice, CoAPDeviceType, CoAPSensor
 from .const import DOMAIN
@@ -84,7 +85,7 @@ class WhoAmI(resource.Resource):
 
 def json_pare(payload: bytes | None) -> tuple[CoAPDevice, bytes | None]:
     """Parse JSON payload from device and return Device object."""
-    device: CoAPDevice = CoAPDevice(device_id=0, device_unique_id="")
+    device: CoAPDevice = CoAPDevice(id=0, unique_id="")
 
     if payload is None:
         return device, b"Missing payload"
@@ -93,16 +94,28 @@ def json_pare(payload: bytes | None) -> tuple[CoAPDevice, bytes | None]:
         # 1. Decode bytes to string and parse JSON
         raw_payload = payload.decode("utf-8")
         data = json.loads(raw_payload)
-        device.device_id = data.get("device_id", None)
-        device.device_unique_id = f"{device.device_id}_{data.get('device_type', 'other')}"
-        device.device_type = CoAPDeviceType(data.get("device_type", "other"))
+        device.id = data.get("id", None)
+        device.unique_id = f"{device.id}_{data.get('type', 'other')}"
         device.manufacturer = data.get("manufacturer", "hagerman")
+        device.model = data.get("model", "unknown")
         device.sw_version = data.get("sw_version", "1.0.0")
         device.hw_version = data.get("hw_version", "1.0.0")
-        device.sensors = data.get("sensors", [])
 
-        if device.device_id is None:
-            return device, b"Missing device_id in payload"
+        for sensor_data in data.get("sensors", []):
+            sensor = CoAPSensor(
+                id=sensor_data.get("id"),
+                name=sensor_data.get("name"),
+                type=SensorDeviceClass.TEMPERATURE,  # Default to NONE, will be set later
+                state=sensor_data.get("value", 255.0)
+            )
+            try:
+                sensor.type = SensorDeviceClass(sensor_data.get("type"))
+            except ValueError:
+                sensor.type = SensorDeviceClass.TEMPERATURE  # Default to TEMPERATURE if type is invalid
+            device.sensors.append(sensor)
+
+        if device.id is None:
+            return device, b"Missing id in payload"
         else:
             return device, None
 

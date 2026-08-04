@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import MyConfigEntry
-from .api import Device, DeviceType
+from .models import CoAPDevice, CoAPDeviceType, CoAPSensor
 from .const import DOMAIN
 from .coordinator import ExampleCoordinator
 
@@ -34,7 +34,7 @@ async def async_setup_entry(
     binary_sensors = [
         ExampleBinarySensor(coordinator, device)
         for device in coordinator.data.devices
-        if device.device_type == DeviceType.DOOR_SENSOR
+        if device.device_type == CoAPDeviceType.DOOR_SENSOR
     ]
 
     # Create the binary sensors.
@@ -44,7 +44,7 @@ async def async_setup_entry(
 class ExampleBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Implementation of a sensor."""
 
-    def __init__(self, coordinator: ExampleCoordinator, device: Device) -> None:
+    def __init__(self, coordinator: ExampleCoordinator, device: CoAPDevice) -> None:
         """Initialise sensor."""
         super().__init__(coordinator)
         self.device = device

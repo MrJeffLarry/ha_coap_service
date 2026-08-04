@@ -3,7 +3,8 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from homeassistant.components.sensor import SensorStateClass
+from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+from homeassistant.components.sensor import SensorStateClass, SensorDeviceClass
 from homeassistant.helpers.typing import StateType
 
 
@@ -15,11 +16,13 @@ class CoAPDeviceType(StrEnum):
     OTHER = "other"
 
 
+@dataclass
 class CoAPSensor:
     """Device sensor."""
 
+    id: int
     name: str
-    type: SensorStateClass
+    type: SensorDeviceClass | BinarySensorDeviceClass
     state: StateType
 
 
@@ -27,13 +30,11 @@ class CoAPSensor:
 class CoAPDevice:
     """API device."""
 
-    device_id: int | None
-    device_unique_id: str
-    device_type: CoAPDeviceType = CoAPDeviceType.OTHER
+    id: str | None
+    unique_id: str
     name: str = "Unknown Device"
     model: str = "Unknown Model"
     manufacturer: str = "hagerman"
     sw_version: str = "1.0.0"
     hw_version: str = "1.0.0"
-    state: int | bool = 0
     sensors: list[CoAPSensor] = field(default_factory=list)

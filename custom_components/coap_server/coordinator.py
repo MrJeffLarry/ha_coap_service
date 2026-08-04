@@ -1,8 +1,8 @@
 """Integration 101 Template integration using DataUpdateCoordinator."""
 
+import logging
 from dataclasses import dataclass
 from datetime import timedelta
-import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -15,9 +15,9 @@ from homeassistant.const import (
 from homeassistant.core import DOMAIN, HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import API, APIAuthError, Device, DeviceType
-from .models import CoAPDevice, CoAPDeviceType, CoAPSensor
+from .api import API, APIAuthError
 from .const import DEFAULT_SCAN_INTERVAL
+from .models import CoAPDevice, CoAPDeviceType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,8 +27,7 @@ class ExampleAPIData:
     """Class to hold api data."""
 
     controller_name: str
-    devices: list[Device]
-    coap_devices: list[CoAPDevice]
+    devices: list[CoAPDevice]
 
 
 class ExampleCoordinator(DataUpdateCoordinator):
@@ -38,7 +37,6 @@ class ExampleCoordinator(DataUpdateCoordinator):
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize coordinator."""
-
         # Set variables from values entered in config flow setup
         self.host = config_entry.data[CONF_HOST]
         self.port = config_entry.data[CONF_PORT]
@@ -66,51 +64,57 @@ class ExampleCoordinator(DataUpdateCoordinator):
         # Initialise your api here
         self.api = API(host=self.host, user=self.user, pwd=self.pwd)
 
+    def _add_devices(self, new_devices: list[CoAPDevice]) -> (list[CoAPDevice], bool):
+        """Add devices to the coordinator."""
+        devices = self.data.devices if self.data else []
+        added = False
+        for device in new_devices:
+            found = False
+            # Update the device in the list if it exists, otherwise add it
+            for i, existing_device in enumerate(devices):
+                if existing_device.unique_id == device.unique_id:
+                    devices[i] = device
+                    found = True
+                    added = True
+                    break
+
+            if not found:
+                _LOGGER.info(
+                    "Adding new device data for %s %s",
+                    device.name,
+                    device.unique_id,
+                )
+                devices.append(device)
+        return devices, added
+
     def push_device_data(self, device: CoAPDevice) -> bool:
-        """Called by the CoAP API to push updated device data into the coordinator.
+        """
+        Called by the CoAP API to push updated device data into the coordinator.
 
         This triggers all subscribed entities to refresh their state.
         """
-        devices = self.data.coap_devices if self.data else []
-        found = False
-        # Update the device in the list if it exists, otherwise add it
-        for i, existing_device in enumerate(devices):
-            if (
-                existing_device.device_type == device.device_type
-                and existing_device.device_unique_id == device.device_unique_id
-            ):
-                devices[i] = device
-                found = True
-                _LOGGER.info(
-                    "Updated device data for %s %s",
-                    device.device_type,
-                    device.device_unique_id,
-                )
-                break
-
-        if not found:
-            _LOGGER.info(
-                "Adding new device data for %s %s",
-                device.device_type,
-                device.device_unique_id,
-            )
-            devices.append(device)
+        devices, added = self._add_devices([device])
 
         self.async_set_updated_data(
-            ExampleAPIData(controller_name=self.api.controller_name, devices=self.data.devices, coap_devices=devices) # pyright: ignore[reportArgumentType]
+            ExampleAPIData(
+                controller_name=self.api.controller_name,
+                devices=devices,
+            ) # pyright: ignore[reportArgumentType]
         )
-        return found
+        return added
 
     async def async_update_data(self):
-        """Fetch data from API endpoint.
+        """
+        Fetch data from API endpoint.
 
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
+        _LOGGER.info("Updating data from API")
         try:
             if not self.api.connected:
                 await self.hass.async_add_executor_job(self.api.connect)
-            devices = await self.hass.async_add_executor_job(self.api.get_devices)
+            tmp_devices = await self.hass.async_add_executor_job(self.api.get_devices)
         except APIAuthError as err:
             _LOGGER.error(err)
             raise UpdateFailed(err) from err
@@ -118,19 +122,40 @@ class ExampleCoordinator(DataUpdateCoordinator):
             # This will show entities as unavailable by raising UpdateFailed exception
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
+        devices, _ = self._add_devices(tmp_devices)
+
         # What is returned here is stored in self.data by the DataUpdateCoordinator
-        return ExampleAPIData(self.api.controller_name, devices, [])
+        return ExampleAPIData(
+            controller_name=self.api.controller_name,
+            devices=devices)
 
     def get_device_by_id(
-        self, device_type: DeviceType, device_id: int
-    ) -> Device | None:
+        self, device_type: CoAPDeviceType, device_id: int
+    ) -> CoAPDevice | None:
         """Return device by device id."""
         # Called by the binary sensors and sensors to get their updated data from self.data
         try:
             return [
                 device
                 for device in self.data.devices
-                if device.device_type == device_type and device.device_id == device_id
+                if device.id == device_id
             ][0]
+        except IndexError:
+            return None
+
+    def get_sensor_by_id(
+        self, device_id: str, sensor_id: int
+    ) -> CoAPSensor | None:
+        """Return sensor by device id and sensor id."""
+        # Called by the binary sensors and sensors to get their updated data from self.data
+        try:
+            for device in self.data.devices:
+                if device.id == device_id:
+                    return [
+                        sensor
+                        for sensor in device.sensors
+                        if sensor.id == sensor_id
+                    ][0]
+
         except IndexError:
             return None
