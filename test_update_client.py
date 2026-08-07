@@ -16,17 +16,17 @@ async def main():
     payload = {
         "id": "device001",
         "sensors": [
-            {"id": 1, "value": random.randint(19, 25)},
-            {"id": 2, "value": random.randint(40, 50)},
-            {"id": 3, "value": random.randint(70, 80)},
-            {"id": 4, "value": random.randint(500, 900)},
+            {"id": 1, "value": random.randint(19, 25) + random.random()/10},  # temperature
+            {"id": 2, "value": random.randint(40, 50)},  # humidity
+            {"id": 3, "value": random.randint(70, 80)},  # battery
+#            {"id": 4, "value": random.randint(500, 900)},  # CO2
         ],
     }
 
     # 3. Create the PUT request
     # NOTE: The path '/sensors/device001/data' matches your tree structure
     request = Message(code=PUT, payload=json.dumps(payload).encode("utf-8"))
-    request.set_request_uri("coap://127.0.0.1:5683/device/data")
+    request.set_request_uri("coap://127.0.0.1:5683/device")
 
     print("Sending request...")
 

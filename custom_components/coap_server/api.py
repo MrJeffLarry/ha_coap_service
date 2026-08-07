@@ -15,16 +15,7 @@ from .models import CoAPDevice, CoAPSensor, CoAPDeviceType
 
 _LOGGER = logging.getLogger(__name__)
 
-DEVICES: list[CoAPDevice] = [
-    CoAPDevice(id=1, unique_id="roomsensor_1", name="RoomSensor", model="RoomSensor2000", manufacturer="hagerman", sensors=[
-        CoAPSensor(id=1, name="Temperature", type=SensorDeviceClass.TEMPERATURE, state=randrange(15, 28)),
-        CoAPSensor(id=2, name="Door", type=BinarySensorDeviceClass.DOOR, state=randrange(0, 2)),
-    ]),
-    CoAPDevice(id=2, unique_id="roomsensor_2", name="RoomSensor", model="RoomSensor2000", manufacturer="hagerman", sensors=[
-        CoAPSensor(id=1, name="Temperature", type=SensorDeviceClass.TEMPERATURE, state=randrange(15, 28)),
-        CoAPSensor(id=2, name="Door", type=BinarySensorDeviceClass.DOOR, state=randrange(0, 2)),
-    ]),
-]
+DEVICES: list[CoAPDevice] = []
 
 class API:
     """Class for example API."""

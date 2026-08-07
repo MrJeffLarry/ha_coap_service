@@ -10,7 +10,6 @@ from aiocoap.resource import ObservableResource
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PORT
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.components.sensor import SensorDeviceClass
 
 from .models import CoAPDevice, CoAPDeviceType, CoAPSensor
@@ -27,8 +26,10 @@ class CoAPServer:
         port: int,
         username: str,
         password: str,
+        hass,
         coordinator) -> None:
         """Initialise services."""
+        self.hass = hass
         self.host = host
         self.port = port
         self.username = username
@@ -38,10 +39,10 @@ class CoAPServer:
     async def setup_services(self) -> Context:
         """Setup CoAP server and register services."""
         root = resource.Site()
-        root.add_resource(["whoami"], WhoAmI(self.coordinator))
-        root.add_resource(["device"], EndpointDevice(self.coordinator))
-        root.add_resource(["device", "data"], EndpointDeviceData(self.coordinator))
-        root.add_resource(["device", "observe"], EndpointDeviceObserveEntity(self.coordinator))
+        root.add_resource(["whoami"], WhoAmI(self.hass, self.coordinator))
+        root.add_resource(["device"], EndpointDevice(self.hass, self.coordinator))
+        root.add_resource(["device", "data"], EndpointDeviceData(self.hass, self.coordinator))
+        root.add_resource(["device", "observe"], EndpointDeviceObserveEntity(self.hass, self.coordinator))
 
         return await Context.create_server_context(root, bind=(self.host, self.port)) # 5683
 
@@ -49,8 +50,9 @@ class CoAPServer:
 
 
 class WhoAmI(resource.Resource):
-    def __init__(self, coordinator):
+    def __init__(self, hass, coordinator):
         super().__init__()
+        self.hass = hass
         self.coordinator = coordinator
 
     async def render_get(self, request: message.Message) -> Message:
@@ -85,7 +87,7 @@ class WhoAmI(resource.Resource):
 
 def json_pare(payload: bytes | None) -> tuple[CoAPDevice, bytes | None]:
     """Parse JSON payload from device and return Device object."""
-    device: CoAPDevice = CoAPDevice(id=0, unique_id="")
+    device: CoAPDevice = CoAPDevice(id=None)
 
     if payload is None:
         return device, b"Missing payload"
@@ -95,18 +97,19 @@ def json_pare(payload: bytes | None) -> tuple[CoAPDevice, bytes | None]:
         raw_payload = payload.decode("utf-8")
         data = json.loads(raw_payload)
         device.id = data.get("id", None)
-        device.unique_id = f"{device.id}_{data.get('type', 'other')}"
-        device.manufacturer = data.get("manufacturer", "hagerman")
-        device.model = data.get("model", "unknown")
-        device.sw_version = data.get("sw_version", "1.0.0")
-        device.hw_version = data.get("hw_version", "1.0.0")
+        device.unique_id = f"{device.id}_{data.get('type')}"
+        device.manufacturer = data.get("manufacturer")
+        device.model = data.get("model")
+        device.sw_version = data.get("sw_version")
+        device.hw_version = data.get("hw_version")
 
         for sensor_data in data.get("sensors", []):
             sensor = CoAPSensor(
                 id=sensor_data.get("id"),
                 name=sensor_data.get("name"),
                 type=SensorDeviceClass.TEMPERATURE,  # Default to NONE, will be set later
-                state=sensor_data.get("value", 255.0)
+                unit=sensor_data.get("unit"), # °C, %, lux, ppm, etc.
+                state=sensor_data.get("value", 0.0)
             )
             try:
                 sensor.type = SensorDeviceClass(sensor_data.get("type"))
@@ -126,8 +129,9 @@ def json_pare(payload: bytes | None) -> tuple[CoAPDevice, bytes | None]:
 
 # If device does not exist in HA it register here or at startup
 class EndpointDevice(resource.Resource):
-    def __init__(self, coordinator):
+    def __init__(self, hass, coordinator):
         super().__init__()
+        self.hass = hass
         self.coordinator = coordinator
 
     # New device, get information about it and all its sensors to publich to HA
@@ -137,25 +141,26 @@ class EndpointDevice(resource.Resource):
             return Message(code=Code.BAD_REQUEST, payload=err)
 
         if self.coordinator.push_device_data(device):
-            return Message(code=Code.CHANGED)
+            return Message(code=Code.CREATED)
 
-        return Message(code=Code.CREATED)  # or 2.04 if you want to swallow it temporarily
+        return Message(code=Code.CHANGED)  # or 2.04 if you want to swallow it temporarily
 
     async def render_put(self, request: message.Message):
         device, err = json_pare(request.payload)
         if err is not None:
             return Message(code=Code.BAD_REQUEST, payload=err)
 
-        if self.coordinator.push_device_data(device):
+        if self.coordinator.update_device_data(device):
             return Message(code=Code.CHANGED)
 
-        return Message(code=Code.CHANGED)
+        return Message(code=Code.NOT_FOUND, payload=b"Device not found")
 
 
 # device send data to HA, send back register new device if not exist
 class EndpointDeviceData(resource.Resource):
-    def __init__(self, coordinator):
+    def __init__(self, hass, coordinator):
         super().__init__()
+        self.hass = hass
         self.coordinator = coordinator
 
     async def render_put(self, request: message.Message):
@@ -163,15 +168,16 @@ class EndpointDeviceData(resource.Resource):
         if err is not None:
             return Message(code=Code.BAD_REQUEST, payload=err)
 
-        if self.coordinator.push_device_data(device):
+        if self.coordinator.update_device_data(device):
             return Message(code=Code.CHANGED)
 
         return Message(code=Code.CHANGED)
 
 # listen for device events from HA -> Device
 class EndpointDeviceObserveEntity(resource.ObservableResource):
-    def __init__(self, coordinator):
+    def __init__(self, hass, coordinator):
         super().__init__()
+        self.hass = hass
         self.coordinator = coordinator
         self.handle = None
 

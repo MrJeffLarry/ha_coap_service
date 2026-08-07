@@ -1,0 +1,56 @@
+import logging
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .const import DOMAIN
+from .coordinator import ExampleCoordinator
+
+_LOGGER = logging.getLogger(__name__)
+
+@callback
+def async_setup_entity_entry_helper(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    entity_class: type[CoordinatorEntity] | None,
+    entity_type: str, # SensorDeviceClass
+    async_add_entities: AddConfigEntryEntitiesCallback, #AddEntitiesCallback,
+) -> None:
+
+    coordinator: ExampleCoordinator = config_entry.runtime_data.coordinator
+    sensors = []
+    for device in coordinator.data.devices:
+        for sensor in device.sensors:
+            if isinstance(sensor.type, entity_type):
+                sensors.append(entity_class(coordinator, device, sensor))
+
+    _LOGGER.info(
+        "Adding new device data for %s sensors: %s",
+        len(sensors),
+        [sensor.name for sensor in sensors]
+    )
+
+    # Create the sensors.
+    async_add_entities(sensors)
+
+    # Callback to dynamically add new entities
+    async def _add_new_device(device):
+        if not device.id or not device.sensors:
+            return
+
+        new_entities = []
+        for sensor in device.sensors:
+            new_entities.append(entity_class(coordinator, device, sensor))
+        async_add_entities(new_entities)
+
+    # Signal is scoped to this config entry, and the subscription is torn down
+    # when the entry unloads/reloads - otherwise listeners from stale/previous
+    # setups of this integration keep firing and try to add entities against
+    # config entries that no longer exist.
+    unsub = async_dispatcher_connect(
+        hass, f"{DOMAIN}_{config_entry.entry_id}_new_device", _add_new_device
+    )
+    config_entry.async_on_unload(unsub)

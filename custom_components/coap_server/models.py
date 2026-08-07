@@ -21,9 +21,11 @@ class CoAPSensor:
     """Device sensor."""
 
     id: int
-    name: str
-    type: SensorDeviceClass | BinarySensorDeviceClass
     state: StateType
+    name: str | None = None
+    type: SensorDeviceClass | BinarySensorDeviceClass | None = None
+    unit: str | None = None
+    state_class: SensorStateClass | None = None
 
 
 @dataclass
@@ -31,10 +33,10 @@ class CoAPDevice:
     """API device."""
 
     id: str | None
-    unique_id: str
-    name: str = "Unknown Device"
-    model: str = "Unknown Model"
-    manufacturer: str = "hagerman"
-    sw_version: str = "1.0.0"
-    hw_version: str = "1.0.0"
+    unique_id: str | None = None
+    name: str | None = None
+    model: str | None = None
+    manufacturer: str | None = None
+    sw_version: str | None = None
+    hw_version: str | None = None
     sensors: list[CoAPSensor] = field(default_factory=list)

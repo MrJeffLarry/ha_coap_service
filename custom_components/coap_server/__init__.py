@@ -36,8 +36,6 @@ class RuntimeData:
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) -> bool:
-    """Set up Example Integration from a config entry."""
-
     # Initialise the coordinator that manages data updates from your api.
     # This is defined in coordinator.py
     coordinator = ExampleCoordinator(hass, config_entry)
@@ -45,11 +43,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) ->
     # Perform an initial data load from api.
     # async_config_entry_first_refresh() is special in that it does not log errors if it fails
     await coordinator.async_config_entry_first_refresh()
-
-    # Test to see if api initialised correctly, else raise ConfigNotReady to make HA retry setup
-    # TODO: Change this to match how your api will know if connected or successful update
-    if not coordinator.api.connected:
-        raise ConfigEntryNotReady
 
     # Initialise a listener for config flow options changes.
     # This will be removed automatically if the integraiton is unloaded.
@@ -60,7 +53,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) ->
         config_entry.add_update_listener(_async_update_listener)
     )
 
-    server = CoAPServer("127.0.0.1", 5683, "username", "password", coordinator)
+    server = CoAPServer(
+        coordinator.host, coordinator.port, "username", "password", hass, coordinator
+    )
 
     # Add the coordinator and update listener to config runtime data to make
     # accessible throughout your integration
@@ -69,8 +64,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) ->
     # Setup platforms (based on the list of entity types in PLATFORMS defined above)
     # This calls the async_setup method in each of your entity type files.
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
-
-#    hass.data[DOMAIN][entry.entry_id][COAP_CONTEXT] =
 
     # Return true to denote a successful setup.
     return True
@@ -83,12 +76,21 @@ async def _async_update_listener(hass: HomeAssistant, config_entry):
 
 
 async def async_remove_config_entry_device(
-    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
+    hass: HomeAssistant, config_entry: MyConfigEntry, device_entry: DeviceEntry
 ) -> bool:
     """Delete device if selected from UI."""
     # Adding this function shows the delete device option in the UI.
-    # Remove this function if you do not want that option.
-    # You may need to do some checks here before allowing devices to be removed.
+    coordinator: ExampleCoordinator = config_entry.runtime_data.coordinator
+    if not coordinator.data:
+        return True
+
+    controller_name = coordinator.data.controller_name
+    for device in list(coordinator.data.devices):
+        expected_identifier = (DOMAIN, f"{controller_name}-{device.id}")
+        if expected_identifier in device_entry.identifiers:
+            coordinator.async_remove_device(device.id)
+            break
+
     return True
 
 
@@ -97,13 +99,18 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: MyConfigEntry) -
     # 1. Forward the unload to the sensor platform
     unload_ok = await hass.config_entries.async_unload_platforms(config_entry, PLATFORMS)
 
-    # 2. Shutdown the CoAP context
-    if unload_ok:
-        coap_context = config_entry.runtime_data.serverContext
-        if coap_context:
-            await coap_context.shutdown()  # This is the critical cleanup step
-
-        # 3. Clean up hass.data
-#        hass.data[DOMAIN].pop(config_entry.entry_id)
+    # 2. Shutdown the CoAP context. This must always run, even if platform
+    # unload fails, otherwise the old aiocoap server keeps the UDP socket
+    # bound and keeps routing device traffic to this (now stale) coordinator
+    # after the config entry has been reloaded/removed and a new one takes
+    # its place on the same host/port.
+    coap_context = config_entry.runtime_data.serverContext
+    if coap_context:
+        try:
+            await coap_context.shutdown()
+        except Exception:
+            _LOGGER.exception(
+                "Error shutting down CoAP context for %s", config_entry.entry_id
+            )
 
     return unload_ok
