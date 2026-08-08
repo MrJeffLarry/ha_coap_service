@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -13,22 +14,30 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import (
     CONF_HOST,
-    CONF_PASSWORD,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
-    CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, MIN_SCAN_INTERVAL
+from .const import (
+    CONF_PSK_IDENTITY,
+    CONF_PSK_KEY,
+    CONF_USE_DTLS,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    MIN_SCAN_INTERVAL,
+)
+
+_LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_PORT, description={"suggested_value": 5683}): int,
         vol.Required(CONF_HOST, description={"suggested_value": "127.0.0.1"}): str,
-        vol.Required(CONF_USERNAME, description={"suggested_value": "test"}): str,
-        vol.Required(CONF_PASSWORD, description={"suggested_value": "1234"}): str,
+        vol.Optional(CONF_USE_DTLS, default=False): bool,
+        vol.Optional(CONF_PSK_IDENTITY, description={"suggested_value": ""}): str,
+        vol.Optional(CONF_PSK_KEY, description={"suggested_value": ""}): str,
     }
 )
 
@@ -41,10 +50,15 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """
     if data[CONF_PORT] < 0 or data[CONF_PORT] > 65535:
         raise PortOutOfRange
-    if not (data[CONF_USERNAME] and data[CONF_PASSWORD]):
-        raise InvalidAuth
+    if data.get(CONF_USE_DTLS):
+        if not (data.get(CONF_PSK_IDENTITY) and data.get(CONF_PSK_KEY)):
+            raise PSKRequired
+        try:
+            import DTLSSocket  # noqa: F401
+        except ImportError as err:
+            raise DTLSNotAvailable from err
 
-    return {"title": f"{data[CONF_USERNAME]}@{data[CONF_HOST]}:{data[CONF_PORT]}"}
+    return {"title": f"{data[CONF_HOST]}:{data[CONF_PORT]}"}
 
 
 class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -82,6 +96,10 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "already_configured"
             except PortOutOfRange:
                 errors["base"] = "port_out_of_range"
+            except PSKRequired:
+                errors["base"] = "psk_required"
+            except DTLSNotAvailable:
+                errors["base"] = "dtls_unavailable"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -114,7 +132,12 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 user_input[CONF_HOST] = config_entry.data[CONF_HOST]
-                await validate_input(self.hass, user_input)
+                if not user_input.get(CONF_PSK_KEY):
+                    # Preserve the existing PSK if the user left it blank
+                    # (e.g. only toggling DTLS on/off).
+                    user_input[CONF_PSK_KEY] = config_entry.data.get(CONF_PSK_KEY, "")
+                merged_input = {**config_entry.data, **user_input}
+                await validate_input(self.hass, merged_input)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -123,6 +146,10 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "already_configured"
             except PortOutOfRange:
                 errors["base"] = "port_out_of_range"
+            except PSKRequired:
+                errors["base"] = "psk_required"
+            except DTLSNotAvailable:
+                errors["base"] = "dtls_unavailable"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -130,17 +157,25 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_update_reload_and_abort(
                     config_entry,
                     unique_id=config_entry.unique_id,
-                    data={**config_entry.data, **user_input},
+                    data=merged_input,
                     reason="reconfigure_successful",
                 )
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_USERNAME, default=config_entry.data[CONF_USERNAME]
+                    vol.Optional(
+                        CONF_USE_DTLS,
+                        default=config_entry.data.get(CONF_USE_DTLS, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_PSK_IDENTITY,
+                        default=config_entry.data.get(CONF_PSK_IDENTITY, ""),
                     ): str,
-                    vol.Required(CONF_PASSWORD): str,
+                    vol.Optional(
+                        CONF_PSK_KEY,
+                        description={"suggested_value": ""},
+                    ): str,
                 }
             ),
             errors=errors,
@@ -152,7 +187,6 @@ class ExampleOptionsFlowHandler(OptionsFlow):
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
         self.options = dict(config_entry.options)
 
     async def async_step_init(self, user_input=None):
@@ -187,3 +221,9 @@ class AlreadyConfigured(HomeAssistantError):
 
 class PortOutOfRange(HomeAssistantError):
     """Error to indicate the port is out of range."""
+
+class PSKRequired(HomeAssistantError):
+    """Error to indicate a PSK identity/key is required when DTLS is enabled."""
+
+class DTLSNotAvailable(HomeAssistantError):
+    """Error to indicate the DTLSSocket package is not installed/available."""

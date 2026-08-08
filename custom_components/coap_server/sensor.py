@@ -130,11 +130,3 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
         # All entities must have a unique id.  Think carefully what you want this to be as
         # changing it later will cause HA to create new entities.
         return self._unique_id
-
-    @property
-    def extra_state_attributes(self):
-        """Return the extra state attributes."""
-        # Add any additional attributes you want on your sensor.
-        attrs = {}
-        attrs["extra_info"] = "Extra Info"
-        return attrs

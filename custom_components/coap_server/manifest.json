@@ -12,7 +12,7 @@
   "requirements": [
     "aiocoap"
   ],
-  "single_config_entry": false,
+  "single_config_entry": true,
   "ssdp": [],
   "version": "1.0.1",
   "zeroconf": []

@@ -8,21 +8,26 @@
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
+      "port_out_of_range": "Port must be between 0 and 65535",
+      "psk_required": "A PSK identity and key are required when DTLS is enabled",
+      "dtls_unavailable": "DTLS support is unavailable: the DTLSSocket package is not installed on this system",
       "unknown": "Unexpected error"
     },
     "step": {
       "user": {
         "data": {
           "host": "Host",
-          "password": "Password",
-          "username": "Username"
+          "port": "Port",
+          "use_dtls": "Use DTLS (CoAPS)",
+          "psk_identity": "PSK identity",
+          "psk_key": "PSK key"
         }
       },
       "reconfigure": {
         "data": {
-          "host": "Host",
-          "password": "Password",
-          "username": "Username"
+          "use_dtls": "Use DTLS (CoAPS)",
+          "psk_identity": "PSK identity",
+          "psk_key": "PSK key"
         }
       }
     }

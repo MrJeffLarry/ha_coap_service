@@ -11,8 +11,8 @@ from homeassistant.helpers.typing import StateType
 class CoAPDeviceType(StrEnum):
     """Device types."""
 
-    TEMP_SENSOR = "temp_sensor"
-    DOOR_SENSOR = "door_sensor"
+    TEMP_SENSOR = "sensor"
+    DOOR_SENSOR = "binary"
     OTHER = "other"
 
 

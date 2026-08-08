@@ -14,16 +14,17 @@ async def main():
 
     # 2. Define the exact payload that matches your server expectations
     payload = {
-        "id": "device001",
+        "id": "device002",
         "manufacturer": "Acme Corp",
         "model": "Model PETA",
         "fw_version": "1.0.0",
         "hw_version": "1.0.0",
         "sensors": [
-            {"id": 1, "name": "Temperature", "unit": "°C", "type": "temperature", "value": random.randint(19, 25) + random.random()/10},
-            {"id": 2, "name": "Humidity", "unit": "%", "type": "humidity", "value": random.randint(40, 50)},
-            {"id": 3, "name": "Battery", "unit": "%", "type": "battery", "value": random.randint(70, 80)},
-#            {"id": 4, "name": "CO2",  "unit": "ppm", "type": "co2", "value": random.randint(500, 900)},
+            {"id": 1, "name": "Temperature", "unit": "°C", "type": "sensor", "sub_type": "temperature", "value": random.randint(19, 25) + random.random()/10},
+            {"id": 2, "name": "Humidity", "unit": "%", "type": "sensor", "sub_type": "humidity", "value": random.randint(40, 50)},
+            {"id": 3, "name": "Battery", "unit": "%", "type": "sensor", "sub_type": "battery", "value": random.randint(70, 80)},
+            {"id": 4, "name": "Motion",  "unit": "", "type": "binary_sensor", "sub_type": "motion", "value": random.randint(0, 1)},
+            {"id": 5, "name": "Light",  "unit": "lux", "type": "sensor", "sub_type": "illuminance", "value": random.randint(100, 200)},
         ],
     }
 

@@ -1,5 +1,14 @@
 # ha-coap-service
 
+## Use DTLS
+
+Please install the following packages to enable DTLS support:
+
+```bash
+apt-get install -y autoconf automake libtool build-essential
+pip install DTLSSocket
+```
+
 ## Development
 
 ### Devcontainer

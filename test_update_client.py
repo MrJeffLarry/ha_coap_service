@@ -14,12 +14,12 @@ async def main():
 
     # 2. Define the exact payload that matches your server expectations
     payload = {
-        "id": "device001",
+        "id": "device002",
         "sensors": [
             {"id": 1, "value": random.randint(19, 25) + random.random()/10},  # temperature
             {"id": 2, "value": random.randint(40, 50)},  # humidity
             {"id": 3, "value": random.randint(70, 80)},  # battery
-#            {"id": 4, "value": random.randint(500, 900)},  # CO2
+            {"id": 4, "value": random.randint(0, 1)},  # motion
         ],
     }
 

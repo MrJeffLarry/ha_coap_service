@@ -9,97 +9,20 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_HOST,
-    CONF_PASSWORD,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
-    CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
-from .api import API, APIAuthError
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
 from .models import CoAPDevice, CoAPDeviceType, CoAPSensor
 
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
-
-
-def _sensor_to_dict(sensor: CoAPSensor) -> dict:
-    """Serialise a CoAPSensor for storage."""
-    return {
-        "id": sensor.id,
-        "name": sensor.name,
-        "type": sensor.type.value if sensor.type else None,
-        "unit": sensor.unit,
-        "state": sensor.state,
-        "state_class": sensor.state_class.value if sensor.state_class else None,
-    }
-
-
-def _sensor_from_dict(data: dict) -> CoAPSensor:
-    """Deserialise a CoAPSensor from storage."""
-    sensor_type: SensorDeviceClass | BinarySensorDeviceClass | None = None
-    raw_type = data.get("type")
-    if raw_type:
-        try:
-            sensor_type = SensorDeviceClass(raw_type)
-        except ValueError:
-            try:
-                sensor_type = BinarySensorDeviceClass(raw_type)
-            except ValueError:
-                sensor_type = None
-
-    state_class: SensorStateClass | None = None
-    if data.get("state_class"):
-        try:
-            state_class = SensorStateClass(data["state_class"])
-        except ValueError:
-            state_class = None
-
-    return CoAPSensor(
-        id=data.get("id"),
-        name=data.get("name"),
-        type=sensor_type,
-        unit=data.get("unit"),
-        state=data.get("state"),
-        state_class=state_class,
-    )
-
-
-def _device_to_dict(device: CoAPDevice) -> dict:
-    """Serialise a CoAPDevice for storage."""
-    return {
-        "id": device.id,
-        "unique_id": device.unique_id,
-        "name": device.name,
-        "model": device.model,
-        "manufacturer": device.manufacturer,
-        "sw_version": device.sw_version,
-        "hw_version": device.hw_version,
-        "sensors": [_sensor_to_dict(sensor) for sensor in device.sensors],
-    }
-
-
-def _device_from_dict(data: dict) -> CoAPDevice:
-    """Deserialise a CoAPDevice from storage."""
-    device = CoAPDevice(
-        id=data.get("id"),
-        unique_id=data.get("unique_id"),
-        name=data.get("name"),
-        model=data.get("model"),
-        manufacturer=data.get("manufacturer"),
-        sw_version=data.get("sw_version"),
-        hw_version=data.get("hw_version"),
-    )
-    device.sensors = [
-        _sensor_from_dict(sensor_data) for sensor_data in data.get("sensors", [])
-    ]
-    return device
-
 
 @dataclass
 class ExampleAPIData:
@@ -120,8 +43,6 @@ class ExampleCoordinator(DataUpdateCoordinator):
         self.hass = hass
         self.host = config_entry.data[CONF_HOST]
         self.port = config_entry.data[CONF_PORT]
-        self.user = config_entry.data[CONF_USERNAME]
-        self.pwd = config_entry.data[CONF_PASSWORD]
         self.name = f"{DOMAIN} ({config_entry.unique_id})"
         self.entry_id = config_entry.entry_id
 
@@ -153,9 +74,6 @@ class ExampleCoordinator(DataUpdateCoordinator):
             hass, STORAGE_VERSION, f"{DOMAIN}_{config_entry.entry_id}_devices"
         )
         self._restored_from_storage = False
-
-        # Initialise your api here
-#        self.api = API(host=self.host, user=self.user, pwd=self.pwd)
 
     async def _async_restore_devices(self) -> list[CoAPDevice]:
         """Load previously known devices from storage."""
@@ -299,7 +217,8 @@ class ExampleCoordinator(DataUpdateCoordinator):
                     devices=devices,
                 ) # pyright: ignore[reportArgumentType]
             )
-            self._async_save_devices_debounced()
+            # Maybe remove this one, we might not need this one...
+#            self._async_save_devices_debounced()
         return updated
 
     def push_device_data(self, device: CoAPDevice) -> bool:
@@ -334,14 +253,10 @@ class ExampleCoordinator(DataUpdateCoordinator):
     def get_device_by_id(self, device_id: str) -> CoAPDevice | None:
         """Return device by device id."""
         # Called by the binary sensors and sensors to get their updated data from self.data
-        try:
-            return [
-                device
-                for device in self.data.devices
-                if device.id == device_id
-            ][0]
-        except IndexError:
-            return None
+        for device in self.data.devices:
+            if device.id == device_id:
+                return device
+        return None
 
     def get_sensor_by_id(self, device_id: str, sensor_id: int) -> CoAPSensor | None:
         """Return sensor by device id and sensor id."""
@@ -353,3 +268,93 @@ class ExampleCoordinator(DataUpdateCoordinator):
                         return sensor
         _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
         return None
+
+
+def _sensor_to_dict(sensor: CoAPSensor) -> dict:
+    """Serialise a CoAPSensor for storage."""
+    return {
+        "id": sensor.id,
+        "name": sensor.name,
+        "type": sensor.type.value if sensor.type else None,
+        "is_binary": isinstance(sensor.type, BinarySensorDeviceClass),
+        "unit": sensor.unit,
+        "state": sensor.state,
+        "state_class": sensor.state_class.value if sensor.state_class else None,
+    }
+
+
+def _sensor_from_dict(data: dict) -> CoAPSensor:
+    """Deserialise a CoAPSensor from storage."""
+    sensor_type: SensorDeviceClass | BinarySensorDeviceClass | None = None
+    raw_type = data.get("type")
+    if raw_type:
+        if "is_binary" in data:
+            # Explicit marker written by a current version of this
+            # integration - some device class names (e.g. "battery", "gas",
+            # "moisture", "power") exist in both SensorDeviceClass and
+            # BinarySensorDeviceClass, so this is needed to disambiguate.
+            try:
+                sensor_type = (
+                    BinarySensorDeviceClass(raw_type)
+                    if data["is_binary"]
+                    else SensorDeviceClass(raw_type)
+                )
+            except ValueError:
+                sensor_type = None
+        else:
+            # Legacy storage written before the is_binary marker existed:
+            # fall back to guessing, preferring the numeric interpretation.
+            try:
+                sensor_type = SensorDeviceClass(raw_type)
+            except ValueError:
+                try:
+                    sensor_type = BinarySensorDeviceClass(raw_type)
+                except ValueError:
+                    sensor_type = None
+
+    state_class: SensorStateClass | None = None
+    if data.get("state_class"):
+        try:
+            state_class = SensorStateClass(data["state_class"])
+        except ValueError:
+            state_class = None
+
+    return CoAPSensor(
+        id=data.get("id"),
+        name=data.get("name"),
+        type=sensor_type,
+        unit=data.get("unit"),
+        state=None,
+        state_class=state_class,
+    )
+
+
+def _device_to_dict(device: CoAPDevice) -> dict:
+    """Serialise a CoAPDevice for storage."""
+    return {
+        "id": device.id,
+        "unique_id": device.unique_id,
+        "name": device.name,
+        "model": device.model,
+        "manufacturer": device.manufacturer,
+        "sw_version": device.sw_version,
+        "hw_version": device.hw_version,
+        "sensors": [_sensor_to_dict(sensor) for sensor in device.sensors],
+    }
+
+
+def _device_from_dict(data: dict) -> CoAPDevice:
+    """Deserialise a CoAPDevice from storage."""
+    device = CoAPDevice(
+        id=data.get("id"),
+        unique_id=data.get("unique_id"),
+        name=data.get("name"),
+        model=data.get("model"),
+        manufacturer=data.get("manufacturer"),
+        sw_version=data.get("sw_version"),
+        hw_version=data.get("hw_version"),
+    )
+    device.sensors = [
+        _sensor_from_dict(sensor_data) for sensor_data in data.get("sensors", [])
+    ]
+    return device

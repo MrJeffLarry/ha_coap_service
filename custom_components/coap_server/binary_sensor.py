@@ -1,4 +1,4 @@
-"""Interfaces with the Integration 101 Template api sensors."""
+"""Interfaces with the CoAP Server binary sensors."""
 
 import logging
 
@@ -12,9 +12,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import MyConfigEntry
-from .models import CoAPDevice, CoAPDeviceType, CoAPSensor
 from .const import DOMAIN
 from .coordinator import ExampleCoordinator
+from .entity import async_setup_entity_entry_helper
+from .models import CoAPDevice, CoAPSensor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,40 +25,60 @@ async def async_setup_entry(
     config_entry: MyConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ):
-    """Set up the Sensors."""
+    """Set up the binary sensors."""
     async_setup_entity_entry_helper(
         hass,
         config_entry,
-        CoAPBinaryEntity,
+        CoAPBinarySensorEntity,
         BinarySensorDeviceClass,
         async_add_entities,
     )
 
 
-class CoAPBinaryEntity(CoordinatorEntity, BinarySensorEntity):
-    """Implementation of a sensor."""
+class CoAPBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
+    """Implementation of a binary sensor."""
 
-    def __init__(self, coordinator: ExampleCoordinator, device: CoAPDevice) -> None:
-        """Initialise sensor."""
+    def __init__(
+        self, coordinator: ExampleCoordinator, device: CoAPDevice, sensor: CoAPSensor
+    ) -> None:
+        """Initialise binary sensor."""
         super().__init__(coordinator)
-        self.device = device
-        self.device_id = device.device_id
+        self.sensor = sensor
+        self.device_id = device.id
+        self.manufacturer = device.manufacturer
+        self.model = device.model
+        self.sw_version = device.sw_version
+        self.id = sensor.id
+        self._unique_id = f"{DOMAIN}-{device.unique_id}-{sensor.id}"
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Update sensor with latest data from coordinator."""
+        """Update binary sensor with latest data from coordinator."""
         # This method is called by your DataUpdateCoordinator when a successful update runs.
-        self.device = self.coordinator.get_device_by_id(
-            self.device.device_type, self.device_id
-        )
-        _LOGGER.debug("Device: %s", self.device)
+        sensor = self.coordinator.get_sensor_by_id(self.device_id, self.id)
+        if sensor is None:
+            # Device/sensor no longer present in the coordinator (e.g. removed via the UI).
+            # Don't null out self.sensor - that would crash is_on/device_class on
+            # the next state write and show the entity as "unavailable".
+            _LOGGER.debug(
+                "No coordinator data for device %s sensor %s; keeping last known state",
+                self.device_id,
+                self.id,
+            )
+            return
+        self.sensor = sensor
         self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return super().available and self.sensor is not None
 
     @property
     def device_class(self) -> str:
         """Return device class."""
         # https://developers.home-assistant.io/docs/core/entity/binary-sensor#available-device-classes
-        return BinarySensorDeviceClass.DOOR
+        return self.sensor.type.value
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -66,14 +87,14 @@ class CoAPBinaryEntity(CoordinatorEntity, BinarySensorEntity):
         # If your device is created elsewhere, you can just specify the indentifiers parameter.
         # If your device connects via another device, add via_device parameter with the indentifiers of that device.
         return DeviceInfo(
-            name=f"ExampleDevice{self.device.device_id}",
-            manufacturer="ACME Manufacturer",
-            model="Door&Temp v1",
-            sw_version="1.0",
+            name=f"{self.device_id}",
+            manufacturer=self.manufacturer,
+            model=self.model,
+            sw_version=self.sw_version,
             identifiers={
                 (
                     DOMAIN,
-                    f"{self.coordinator.data.controller_name}-{self.device.device_id}",
+                    f"{self.coordinator.data.controller_name}-{self.device_id}",
                 )
             },
         )
@@ -81,25 +102,18 @@ class CoAPBinaryEntity(CoordinatorEntity, BinarySensorEntity):
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
-        return self.device.name
+        return self.sensor.name
 
     @property
     def is_on(self) -> bool | None:
-        """Return if the binary sensor is on."""
-        # This needs to enumerate to true or false
-        return self.device.state
+        """Return true if the binary sensor is on."""
+        if self.sensor.state is None:
+            return None
+        return bool(self.sensor.state)
 
     @property
     def unique_id(self) -> str:
         """Return unique id."""
         # All entities must have a unique id.  Think carefully what you want this to be as
         # changing it later will cause HA to create new entities.
-        return f"{DOMAIN}-{self.device.device_unique_id}"
-
-    @property
-    def extra_state_attributes(self):
-        """Return the extra state attributes."""
-        # Add any additional attributes you want on your sensor.
-        attrs = {}
-        attrs["extra_info"] = "Extra Info"
-        return attrs
+        return self._unique_id

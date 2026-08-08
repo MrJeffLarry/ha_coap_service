@@ -14,13 +14,13 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .coordinator import ExampleCoordinator
-from .server import CoAPServer
-from .const import DOMAIN, COAP_CONTEXT
+from .server import CoAPServer, DTLSNotAvailable
+from .const import CONF_PSK_IDENTITY, CONF_PSK_KEY, CONF_USE_DTLS, DOMAIN, COAP_CONTEXT
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
-#    Platform.BINARY_SENSOR,
+    Platform.BINARY_SENSOR,
     Platform.SENSOR
 ]
 
@@ -54,12 +54,23 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) ->
     )
 
     server = CoAPServer(
-        coordinator.host, coordinator.port, "username", "password", hass, coordinator
+        coordinator.host,
+        coordinator.port,
+        hass,
+        coordinator,
+        use_dtls=config_entry.data.get(CONF_USE_DTLS, False),
+        psk_identity=config_entry.data.get(CONF_PSK_IDENTITY),
+        psk_key=config_entry.data.get(CONF_PSK_KEY),
     )
 
     # Add the coordinator and update listener to config runtime data to make
     # accessible throughout your integration
-    config_entry.runtime_data = RuntimeData(coordinator, await server.setup_services())
+    try:
+        coap_context = await server.setup_services()
+    except DTLSNotAvailable as err:
+        raise ConfigEntryNotReady(str(err)) from err
+
+    config_entry.runtime_data = RuntimeData(coordinator, coap_context)
 
     # Setup platforms (based on the list of entity types in PLATFORMS defined above)
     # This calls the async_setup method in each of your entity type files.
