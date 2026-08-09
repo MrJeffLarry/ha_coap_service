@@ -52,8 +52,8 @@ class CoAPSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self.sw_version = device.sw_version
         self._attr_device_class = sensor.type.value
         self.id = sensor.id
-        self._unique_id = f"{DOMAIN}-{device.unique_id}-{sensor.id}"
-        self._attr_unique_id = f"{DOMAIN}-{device.unique_id}-{sensor.id}"
+#        self._unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
+        self._attr_unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
         self._attr_device_info = DeviceInfo(
             identifiers={
                 (

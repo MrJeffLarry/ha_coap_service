@@ -48,7 +48,7 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
         self.sw_version = device.sw_version
         self._attr_device_class = sensor.type.value
         self.id = sensor.id
-        self._unique_id = f"{DOMAIN}-{device.unique_id}-{sensor.id}"
+        self._unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
 
     @callback
     def _handle_coordinator_update(self) -> None:

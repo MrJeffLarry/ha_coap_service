@@ -13,7 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PORT
 from homeassistant.core import HomeAssistant
 
-from .models import CoAPDevice
+from .models import CoAPDevice, CoAPObserveRequest, CoAPObserveResponse
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -145,32 +145,6 @@ def json_pare(payload: bytes | None) -> tuple[CoAPDevice, bytes | None]:
         raw_payload = payload.decode("utf-8")
         data = json.loads(raw_payload)
         device = CoAPDevice.from_dict(data)
-#        device.id = data.get("id", None)
-#        device.unique_id = f"{device.id}_{data.get('type')}"
-#        device.manufacturer = data.get("manufacturer")
-#        device.model = data.get("model")
-#        device.sw_version = data.get("sw_version")
-#        device.hw_version = data.get("hw_version")
-
-#        for sensor_data in data.get("sensors", []):
-#            sensor = CoAPSensor.from_json(sensor_data)
-#            sensor_type = _parse_sensor_type(
-#                sensor_data.get("type"), sensor_data.get("sub_type")
-#            )
-#            raw_value = sensor_data.get("value", 0.0)
-#            state = (
-#                _coerce_binary_state(raw_value)
-#                if isinstance(sensor_type, BinarySensorDeviceClass)
-#                else raw_value
-#            )
-#            sensor = CoAPSensor(
-#                id=sensor_data.get("id"),
-#                name=sensor_data.get("name"),
-#                type=sensor_type,
-#                unit=sensor_data.get("unit"), # °C, %, lux, ppm, etc. (ignored for binary sensors)
-#                state=state,
-#            )
-#            device.sensors.append(sensor)
 
         if device.id is None:
             return device, b"Missing id in payload"
@@ -226,7 +200,7 @@ class EndpointDeviceData(resource.Resource):
         if self.coordinator.update_device_data(device):
             return Message(code=Code.CHANGED)
 
-        return Message(code=Code.CHANGED)
+        return Message(code=Code.NOT_FOUND, payload=b"Device not found")
 
 # listen for device events from HA -> Device
 class EndpointDeviceObserveEntity(resource.ObservableResource):
@@ -237,21 +211,41 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         self.handle = None
 
     def notify(self):
+        _LOGGER.debug("Notify observers of /device/observe")
         self.updated_state()
-        self.reschedule()
+#        self.reschedule()
 
-    def reschedule(self):
-        self.handle = asyncio.get_running_loop().call_later(5, self.notify)
+#    def reschedule(self):
+#        _LOGGER.debug("Rescheduling notify for /device/observe")
+#        self.handle = asyncio.get_running_loop().call_later(5, self.notify)
 
-#    def update_observation_count(self, newcount):
-#        if newcount and self.handle is None:
-#            print("Starting the clock")
+    def update_observation_count(self, newcount):
+        _LOGGER.debug("Observation count changed to %d for /device/observe", newcount)
+        if newcount and self.handle is None:
+            _LOGGER.debug("Scheduling notify for /device/observe")
 #            self.reschedule()
- #       if newcount == 0 and self.handle:
-  #          print("Stopping the clock")
-  #          self.handle.cancel()
-  #          self.handle = None
+        if newcount == 0 and self.handle:
+            _LOGGER.debug("Cancelling notify for /device/observe")
+#            self.handle.cancel()
+#            self.handle = None
 
-    async def render_get(self, request: message.Message):
+    async def render_get(self, request: Message):
+        _LOGGER.debug("GET /device/observe %s", request)
         payload = datetime.datetime.now().strftime("%Y-%m-%d %H:%M").encode("ascii")
         return Message(payload=payload, content_format=ContentFormat.TEXT)
+
+    async def render_post(self, request: Message):
+        _LOGGER.debug("POST /device/observe %s", request)
+
+        try:
+            raw_payload = request.payload.decode("utf-8")
+            data = json.loads(raw_payload)
+            sub_data = self.coordinator.get_subscribe_data(data, self.notify)
+            return Message(
+                payload=json.dumps(CoAPObserveResponse.to_dict(sub_data)).encode("utf-8"),
+                content_format=ContentFormat.JSON
+            )
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return Message(code=Code.BAD_REQUEST, payload=b"could not parse json")
+
+        return Message(code=Code.BAD_REQUEST, payload=b"could not parse json")

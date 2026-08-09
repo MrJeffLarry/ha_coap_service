@@ -1,6 +1,7 @@
 """Data models shared across the ha_coap_service integration."""
 
 from dataclasses import dataclass, field
+from typing import Callable, Any
 from enum import StrEnum
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
@@ -128,6 +129,7 @@ class CoAPDevice:
     manufacturer: str | None = None
     sw_version: str | None = None
     hw_version: str | None = None
+    notify_callback: Callable[[], None] | None = field(default=None, repr=False)
     sensors: list[CoAPSensor] = field(default_factory=list)
 
     @classmethod
@@ -157,3 +159,49 @@ class CoAPDevice:
             "hw_version": device.hw_version,
             "sensors": [CoAPSensor.to_dict(sensor) for sensor in device.sensors],
         }
+
+@dataclass
+class CoAPObserveValue:
+    """Structured representation of a CoAP observe value."""
+
+    id: str | None
+    value: StateType
+
+@dataclass
+class CoAPObserveResponse:
+    """Structured representation of a CoAP observe response."""
+
+    id: str | None
+    sensors: list[CoAPObserveValue] = field(default_factory=list)
+
+    @classmethod
+    def from_device(cls, device: CoAPDevice) -> CoAPObserveResponse:
+        """Factory method to create an observe response from a CoAPDevice."""
+        sensors = device.sensors if device.sensors else []
+        return cls(
+            id=device.id,
+            sensors=[CoAPObserveValue(id=sensor.id, value=sensor.state) for sensor in sensors]
+        )
+
+    @classmethod
+    def to_dict(cls, response: CoAPObserveResponse) -> dict[str, Any]:
+        """Convert a CoAPObserveResponse instance back to a dictionary."""
+        return {
+            "id": response.id,
+            "sensors": [{"id": sensor.id, "value": sensor.value} for sensor in response.sensors],
+        }
+
+@dataclass
+class CoAPObserveRequest:
+    """Structured representation of a CoAP observe request."""
+
+    id: str | None
+    sensors: list[int] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, raw_data: dict[str, Any]) -> CoAPObserveRequest:
+        """Factory method to parse a raw JSON observe request payload cleanly."""
+        return cls(
+            id=raw_data.get("id"),
+            sensors=raw_data.get("sensors", [])
+        )

@@ -18,7 +18,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
-from .models import CoAPDevice, CoAPSensor
+from .models import CoAPDevice, CoAPSensor, CoAPObserveResponse
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +74,19 @@ class ExampleCoordinator(DataUpdateCoordinator):
             hass, STORAGE_VERSION, f"{DOMAIN}_{config_entry.entry_id}_devices"
         )
         self._restored_from_storage = False
+
+    async def _async_update_data(self):
+        if self.data:
+            devices = self.data.devices
+        elif not self._restored_from_storage:
+            self._restored_from_storage = True
+            devices = await self._async_restore_devices()
+        else:
+            devices = []
+
+        return ExampleAPIData(
+            controller_name=self.name,
+            devices=devices)
 
     async def _async_restore_devices(self) -> list[CoAPDevice]:
         """Load previously known devices from storage."""
@@ -145,24 +158,6 @@ class ExampleCoordinator(DataUpdateCoordinator):
         self._async_save_devices()
         return True
 
-    def async_remove_device(self, device_id: str) -> bool:
-        """Remove a device (e.g. deleted via the UI) from the coordinator and storage."""
-        if not self.data:
-            return False
-
-        devices = [d for d in self.data.devices if d.id != device_id]
-        if len(devices) == len(self.data.devices):
-            return False
-
-        _LOGGER.info("Removing device %s from coordinator", device_id)
-        self.async_set_updated_data(
-            ExampleAPIData(
-                controller_name=self.name,
-                devices=devices,
-            ) # pyright: ignore[reportArgumentType]
-        )
-        self._async_save_devices()
-        return True
 
     def _update_device(self, device: CoAPDevice) -> bool:
         """Update device in the coordinator."""
@@ -211,6 +206,8 @@ class ExampleCoordinator(DataUpdateCoordinator):
             )
 
         if updated:
+            if device.notify_callback is not None:
+                device.notify_callback()
             self.async_set_updated_data(
                 ExampleAPIData(
                     controller_name=self.name,
@@ -220,6 +217,31 @@ class ExampleCoordinator(DataUpdateCoordinator):
             # Maybe remove this one, we might not need this one...
 #            self._async_save_devices_debounced()
         return updated
+
+#
+#
+# Public methods called by the CoAP API to push data into the coordinator
+#
+#
+
+    def async_remove_device(self, device_id: str) -> bool:
+        """Remove a device (e.g. deleted via the UI) from the coordinator and storage."""
+        if not self.data:
+            return False
+
+        devices = [d for d in self.data.devices if d.id != device_id]
+        if len(devices) == len(self.data.devices):
+            return False
+
+        _LOGGER.info("Removing device %s from coordinator", device_id)
+        self.async_set_updated_data(
+            ExampleAPIData(
+                controller_name=self.name,
+                devices=devices,
+            ) # pyright: ignore[reportArgumentType]
+        )
+        self._async_save_devices()
+        return True
 
     def push_device_data(self, device: CoAPDevice) -> bool:
         """
@@ -256,20 +278,8 @@ class ExampleCoordinator(DataUpdateCoordinator):
             if sensor.id == sensor_id:
                 device.sensors[i].state = state
                 break
+
         return self._update_device(device)
-
-    async def _async_update_data(self):
-        if self.data:
-            devices = self.data.devices
-        elif not self._restored_from_storage:
-            self._restored_from_storage = True
-            devices = await self._async_restore_devices()
-        else:
-            devices = []
-
-        return ExampleAPIData(
-            controller_name=self.name,
-            devices=devices)
 
     def get_device_by_id(self, device_id: str) -> CoAPDevice | None:
         """Return device by device id."""
@@ -289,3 +299,12 @@ class ExampleCoordinator(DataUpdateCoordinator):
                         return sensor
         _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
         return None
+
+    def get_subscribe_data(self, device: CoAPDevice, notify_callback) -> CoAPObserveResponse:
+        """Return True if a sensor is  notify_callback subscribed to the coordinator."""
+        for i, device in enumerate(self.data.devices):
+            if device.id == device.id and device.notify_callback is None:
+                self.data.devices[i].notify_callback = notify_callback
+
+        device = self.get_device_by_id(device_id=device.id)
+        return CoAPObserveResponse.from_device(device, )

@@ -14,7 +14,7 @@ async def main():
 
     # 2. Define the exact payload that matches your server expectations
     payload = {
-        "id": "device002",
+        "id": "device001",
         "manufacturer": "Acme Corp",
         "model": "Model PETA",
         "fw_version": "1.0.0",

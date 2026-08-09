@@ -49,7 +49,7 @@ class CoAPBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         self.model = device.model
         self.sw_version = device.sw_version
         self.id = sensor.id
-        self._unique_id = f"{DOMAIN}-{device.unique_id}-{sensor.id}"
+        self._unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
 
     @callback
     def _handle_coordinator_update(self) -> None:
