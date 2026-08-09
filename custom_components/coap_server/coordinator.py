@@ -18,7 +18,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
-from .models import CoAPDevice, CoAPDeviceType, CoAPSensor
+from .models import CoAPDevice, CoAPSensor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ class ExampleCoordinator(DataUpdateCoordinator):
             return []
 
         devices = [
-            _device_from_dict(device_data)
+            CoAPDevice.from_dict(device_data)
             for device_data in stored.get("devices", [])
         ]
         _LOGGER.info("Restored %d device(s) from storage", len(devices))
@@ -94,7 +94,7 @@ class ExampleCoordinator(DataUpdateCoordinator):
 
     def _devices_payload(self) -> dict:
         """Build the JSON-serialisable payload representing all known devices."""
-        return {"devices": [_device_to_dict(device) for device in self.data.devices]}
+        return {"devices": [CoAPDevice.to_dict(device) for device in self.data.devices]}
 
     def _async_save_devices(self) -> None:
         """Persist the current device list immediately (e.g. when a device is added)."""
@@ -237,6 +237,27 @@ class ExampleCoordinator(DataUpdateCoordinator):
         """
         return self._update_device(device)
 
+    def update_sensor_data(self, device_id: str, sensor_id: int, state: float | int | str | bool) -> bool:
+        """
+        Called by switch.py to update sensor data into the coordinator.
+        """
+        device = self.get_device_by_id(device_id)
+        if not device:
+            _LOGGER.warning("Device with id %s not found", device_id)
+            return False
+
+        sensor = self.get_sensor_by_id(device_id, sensor_id)
+        if not sensor:
+            _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
+            return False
+
+        sensor.state = state
+        for i, sensor in enumerate(device.sensors):
+            if sensor.id == sensor_id:
+                device.sensors[i].state = state
+                break
+        return self._update_device(device)
+
     async def _async_update_data(self):
         if self.data:
             devices = self.data.devices
@@ -268,93 +289,3 @@ class ExampleCoordinator(DataUpdateCoordinator):
                         return sensor
         _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
         return None
-
-
-def _sensor_to_dict(sensor: CoAPSensor) -> dict:
-    """Serialise a CoAPSensor for storage."""
-    return {
-        "id": sensor.id,
-        "name": sensor.name,
-        "type": sensor.type.value if sensor.type else None,
-        "is_binary": isinstance(sensor.type, BinarySensorDeviceClass),
-        "unit": sensor.unit,
-        "state": sensor.state,
-        "state_class": sensor.state_class.value if sensor.state_class else None,
-    }
-
-
-def _sensor_from_dict(data: dict) -> CoAPSensor:
-    """Deserialise a CoAPSensor from storage."""
-    sensor_type: SensorDeviceClass | BinarySensorDeviceClass | None = None
-    raw_type = data.get("type")
-    if raw_type:
-        if "is_binary" in data:
-            # Explicit marker written by a current version of this
-            # integration - some device class names (e.g. "battery", "gas",
-            # "moisture", "power") exist in both SensorDeviceClass and
-            # BinarySensorDeviceClass, so this is needed to disambiguate.
-            try:
-                sensor_type = (
-                    BinarySensorDeviceClass(raw_type)
-                    if data["is_binary"]
-                    else SensorDeviceClass(raw_type)
-                )
-            except ValueError:
-                sensor_type = None
-        else:
-            # Legacy storage written before the is_binary marker existed:
-            # fall back to guessing, preferring the numeric interpretation.
-            try:
-                sensor_type = SensorDeviceClass(raw_type)
-            except ValueError:
-                try:
-                    sensor_type = BinarySensorDeviceClass(raw_type)
-                except ValueError:
-                    sensor_type = None
-
-    state_class: SensorStateClass | None = None
-    if data.get("state_class"):
-        try:
-            state_class = SensorStateClass(data["state_class"])
-        except ValueError:
-            state_class = None
-
-    return CoAPSensor(
-        id=data.get("id"),
-        name=data.get("name"),
-        type=sensor_type,
-        unit=data.get("unit"),
-        state=None,
-        state_class=state_class,
-    )
-
-
-def _device_to_dict(device: CoAPDevice) -> dict:
-    """Serialise a CoAPDevice for storage."""
-    return {
-        "id": device.id,
-        "unique_id": device.unique_id,
-        "name": device.name,
-        "model": device.model,
-        "manufacturer": device.manufacturer,
-        "sw_version": device.sw_version,
-        "hw_version": device.hw_version,
-        "sensors": [_sensor_to_dict(sensor) for sensor in device.sensors],
-    }
-
-
-def _device_from_dict(data: dict) -> CoAPDevice:
-    """Deserialise a CoAPDevice from storage."""
-    device = CoAPDevice(
-        id=data.get("id"),
-        unique_id=data.get("unique_id"),
-        name=data.get("name"),
-        model=data.get("model"),
-        manufacturer=data.get("manufacturer"),
-        sw_version=data.get("sw_version"),
-        hw_version=data.get("hw_version"),
-    )
-    device.sensors = [
-        _sensor_from_dict(sensor_data) for sensor_data in data.get("sensors", [])
-    ]
-    return device

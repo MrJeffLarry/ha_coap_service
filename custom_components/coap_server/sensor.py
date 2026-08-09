@@ -1,5 +1,3 @@
-"""Interfaces with the Integration 101 Template api sensors."""
-
 import logging
 
 from homeassistant.components.sensor import (

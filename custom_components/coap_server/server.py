@@ -12,10 +12,8 @@ from aiocoap.resource import ObservableResource
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PORT
 from homeassistant.core import HomeAssistant
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass
-from homeassistant.components.sensor import SensorDeviceClass
 
-from .models import CoAPDevice, CoAPDeviceType, CoAPSensor
+from .models import CoAPDevice
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -134,36 +132,6 @@ class WhoAmI(resource.Resource):
             content_format=ContentFormat.TEXT,
         )
 
-def _parse_sensor_type(
-    raw_type: str | None, sub_type: str | None
-) -> SensorDeviceClass | BinarySensorDeviceClass:
-    """Resolve a sensor's device class from its raw type string.
-
-    A handful of device class names exist in both SensorDeviceClass and
-    BinarySensorDeviceClass (currently battery, carbon_monoxide, gas,
-    moisture, power), so it is ambiguous which entity domain to use for
-    them based on the name alone. Devices should send an explicit
-    is_binary flag alongside type to disambiguate. If it is omitted (e.g.
-    older or simpler devices), fall back to guessing: try the numeric
-    SensorDeviceClass interpretation first, then BinarySensorDeviceClass.
-    """
-    if raw_type == "sensor":
-        return SensorDeviceClass(sub_type)
-    elif raw_type == "binary_sensor":
-        return BinarySensorDeviceClass(sub_type)
-    return None
-
-
-def _coerce_binary_state(value) -> bool:
-    """Coerce an incoming raw sensor value into a bool for binary sensors."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    if isinstance(value, str):
-        return value.strip().lower() in ("1", "true", "on", "open", "yes", "detected")
-    return bool(value)
-
 
 def json_pare(payload: bytes | None) -> tuple[CoAPDevice, bytes | None]:
     """Parse JSON payload from device and return Device object."""
@@ -176,31 +144,33 @@ def json_pare(payload: bytes | None) -> tuple[CoAPDevice, bytes | None]:
         # 1. Decode bytes to string and parse JSON
         raw_payload = payload.decode("utf-8")
         data = json.loads(raw_payload)
-        device.id = data.get("id", None)
-        device.unique_id = f"{device.id}_{data.get('type')}"
-        device.manufacturer = data.get("manufacturer")
-        device.model = data.get("model")
-        device.sw_version = data.get("sw_version")
-        device.hw_version = data.get("hw_version")
+        device = CoAPDevice.from_dict(data)
+#        device.id = data.get("id", None)
+#        device.unique_id = f"{device.id}_{data.get('type')}"
+#        device.manufacturer = data.get("manufacturer")
+#        device.model = data.get("model")
+#        device.sw_version = data.get("sw_version")
+#        device.hw_version = data.get("hw_version")
 
-        for sensor_data in data.get("sensors", []):
-            sensor_type = _parse_sensor_type(
-                sensor_data.get("type"), sensor_data.get("sub_type")
-            )
-            raw_value = sensor_data.get("value", 0.0)
-            state = (
-                _coerce_binary_state(raw_value)
-                if isinstance(sensor_type, BinarySensorDeviceClass)
-                else raw_value
-            )
-            sensor = CoAPSensor(
-                id=sensor_data.get("id"),
-                name=sensor_data.get("name"),
-                type=sensor_type,
-                unit=sensor_data.get("unit"), # °C, %, lux, ppm, etc. (ignored for binary sensors)
-                state=state,
-            )
-            device.sensors.append(sensor)
+#        for sensor_data in data.get("sensors", []):
+#            sensor = CoAPSensor.from_json(sensor_data)
+#            sensor_type = _parse_sensor_type(
+#                sensor_data.get("type"), sensor_data.get("sub_type")
+#            )
+#            raw_value = sensor_data.get("value", 0.0)
+#            state = (
+#                _coerce_binary_state(raw_value)
+#                if isinstance(sensor_type, BinarySensorDeviceClass)
+#                else raw_value
+#            )
+#            sensor = CoAPSensor(
+#                id=sensor_data.get("id"),
+#                name=sensor_data.get("name"),
+#                type=sensor_type,
+#                unit=sensor_data.get("unit"), # °C, %, lux, ppm, etc. (ignored for binary sensors)
+#                state=state,
+#            )
+#            device.sensors.append(sensor)
 
         if device.id is None:
             return device, b"Missing id in payload"

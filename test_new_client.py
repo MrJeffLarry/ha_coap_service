@@ -23,8 +23,9 @@ async def main():
             {"id": 1, "name": "Temperature", "unit": "°C", "type": "sensor", "sub_type": "temperature", "value": random.randint(19, 25) + random.random()/10},
             {"id": 2, "name": "Humidity", "unit": "%", "type": "sensor", "sub_type": "humidity", "value": random.randint(40, 50)},
             {"id": 3, "name": "Battery", "unit": "%", "type": "sensor", "sub_type": "battery", "value": random.randint(70, 80)},
-            {"id": 4, "name": "Motion",  "unit": "", "type": "binary_sensor", "sub_type": "motion", "value": random.randint(0, 1)},
-            {"id": 5, "name": "Light",  "unit": "lux", "type": "sensor", "sub_type": "illuminance", "value": random.randint(100, 200)},
+            {"id": 4, "name": "Light",  "unit": "lx", "type": "sensor", "sub_type": "illuminance", "value": random.randint(100, 200)},
+            {"id": 5, "name": "Motion",  "unit": "", "type": "binary", "sub_type": "motion", "value": random.randint(0, 1)},
+            {"id": 6, "name": "Switch",  "unit": "", "type": "switch", "sub_type": "switch", "value": random.randint(0, 1)},
         ],
     }
 
