@@ -1,0 +1,40 @@
+name: Release workflow
+
+on:
+  release:
+    types:
+      - published
+
+env:
+  COMPOMENT: coap_server
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Get release version
+        id: version
+        uses: home-assistant/actions/helpers/version@master
+
+      - name: Validate data
+        run: |
+          manifestversion=$(jq -r '.version' ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json)
+          if [ "$manifestversion" != "${{ steps.version.outputs.version }}" ]; then
+            echo "The version in custom_components/${{ env.COMPOMENT }}/manifest.json was not correct"
+            echo "$manifestversion"
+            exit 1
+          fi
+
+      - name: Create zip file for the integration
+        run: |
+          cd "${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}"
+          zip ${{ env.COMPOMENT }}.zip -r ./
+
+      - name: Upload the zipfile as a release asset
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          files: ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/${{ env.COMPOMENT }}.zip
