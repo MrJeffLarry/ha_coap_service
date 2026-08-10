@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import logging
+import collections
 
 from aiocoap import Context, Message, error, resource
 from aiocoap.credentials import DTLS as DTLSCredential
@@ -18,6 +19,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+ObservationKey = collections.namedtuple("ObservationKey", ["token", "remote"])
 
 class DTLSNotAvailable(RuntimeError):
     """Raised when DTLS is requested but the DTLSSocket package is unavailable."""
@@ -209,43 +211,102 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         self.hass = hass
         self.coordinator = coordinator
         self.handle = None
+        self.device_id = None
+        # Maps device_id -> set of observation keys
+        self.device_observers = collections.defaultdict(set)
+        # Maps observation key -> actual aiocoap ServerObservation object
+        self.observations = {}
 
-    def notify(self):
-        _LOGGER.debug("Notify observers of /device/observe")
-        self.updated_state()
-#        self.reschedule()
+        # Register the callback with the coordinator on init
+        # This assumes your coordinator can call: callback(device_id)
+        if hasattr(self.coordinator, "async_add_notifyer"):
+            self._unregister_callback = self.coordinator.async_add_notifyer(self.notify)
 
-#    def reschedule(self):
-#        _LOGGER.debug("Rescheduling notify for /device/observe")
-#        self.handle = asyncio.get_running_loop().call_later(5, self.notify)
+    async def add_observation(self, request, server_observation):
+        """Called automatically by aiocoap when a client requests observation."""
+        _LOGGER.debug("Observation requested for /device/observe %s", request)
+        if server_observation is None:
+            return
+
+        # 1. Look for the 'id' parameter inside the URI query string
+        device_id = None
+        sensor_id = None
+        uri = request.get_request_uri() # Returns something like 'id=device_123'
+        query_string = request.opt.uri_query if request.opt else None
+
+        _LOGGER.debug("Query string: %s", query_string)
+
+        for query in query_string or []:
+            if query.startswith("id="):
+                device_id = query.split("=", 1)[1]
+            elif query.startswith("sensor_id="):
+                sensor_id = query.split("=", 1)[1]
+
+        _LOGGER.debug("Extracted device_id: %s, sensor_id: %s", device_id, sensor_id)
+
+        if not device_id or not sensor_id:
+            _LOGGER.error("Rejected observation request: No 'id' parameter found in URI query string.")
+            return
+
+        unique_key = f"{device_id}:{sensor_id[0]}"
+
+        # Generate a unique key for this specific connection
+        key = ObservationKey(request.token, request.remote)
+
+        if unique_key:
+            self.device_observers[unique_key].add(key)
+            self.observations[key] = server_observation
+
+            # 3. Clean up when the client cancels or disconnects
+            def on_observation_cancelled():
+                _LOGGER.debug("Observation cancelled for client %s on device %s", request.remote, device_id)
+                # send disconnect message to device if needed
+                response = Message(payload=b"Observation cancelled", content_format=ContentFormat.TEXT)
+
+                obs = self.observations.get(key)
+                if obs:
+                    obs.trigger(response)
+
+                self.device_observers[device_id].discard(key)
+                self.observations.pop(key, None)
+                if not self.device_observers[device_id]:
+                    del self.device_observers[device_id]
+
+            # In aiocoap, accept() is enough to handle all teardown/cancellation scenarios
+            server_observation.accept(on_observation_cancelled)
+#            server_observation.register_errback(lambda _: on_observation_cancelled())
+#            server_observation.accept(on_observation_cancelled)
+
+    def notify(self, device_id=None, sensor_id=None):
+        """Triggers updates ONLY for clients registered to this device_id."""
+        _LOGGER.debug("Targeted notify for device %s", device_id)
+        unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id else None
+        if not unique_key or unique_key not in self.device_observers:
+             return
+
+        if sensor_id is None:
+            return
+
+        sub_data = self.coordinator.get_subscribe_data(device_id, sensor_id)
+        _LOGGER.debug("Subscribe data: %s", sub_data)
+        response = Message(
+            code=Code.CONTENT,
+            payload=json.dumps(CoAPObserveResponse.to_dict(sub_data)).encode("utf-8"),
+            content_format=ContentFormat.JSON
+        )
+#         response = Message(payload=payload, content_format=ContentFormat.TEXT)
+
+        # Loop through and update only the subscribers tied to this device_id
+        for key in list(self.device_observers[unique_key]):
+            obs = self.observations.get(key)
+            if obs:
+                obs.trigger(response)
 
     def update_observation_count(self, newcount):
         _LOGGER.debug("Observation count changed to %d for /device/observe", newcount)
-        if newcount and self.handle is None:
-            _LOGGER.debug("Scheduling notify for /device/observe")
-#            self.reschedule()
-        if newcount == 0 and self.handle:
-            _LOGGER.debug("Cancelling notify for /device/observe")
-#            self.handle.cancel()
-#            self.handle = None
 
     async def render_get(self, request: Message):
         _LOGGER.debug("GET /device/observe %s", request)
+
         payload = datetime.datetime.now().strftime("%Y-%m-%d %H:%M").encode("ascii")
         return Message(payload=payload, content_format=ContentFormat.TEXT)
-
-    async def render_post(self, request: Message):
-        _LOGGER.debug("POST /device/observe %s", request)
-
-        try:
-            raw_payload = request.payload.decode("utf-8")
-            data = json.loads(raw_payload)
-            sub_data = self.coordinator.get_subscribe_data(data, self.notify)
-            return Message(
-                payload=json.dumps(CoAPObserveResponse.to_dict(sub_data)).encode("utf-8"),
-                content_format=ContentFormat.JSON
-            )
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return Message(code=Code.BAD_REQUEST, payload=b"could not parse json")
-
-        return Message(code=Code.BAD_REQUEST, payload=b"could not parse json")

@@ -129,7 +129,6 @@ class CoAPDevice:
     manufacturer: str | None = None
     sw_version: str | None = None
     hw_version: str | None = None
-    notify_callback: Callable[[], None] | None = field(default=None, repr=False)
     sensors: list[CoAPSensor] = field(default_factory=list)
 
     @classmethod
@@ -165,7 +164,15 @@ class CoAPObserveValue:
     """Structured representation of a CoAP observe value."""
 
     id: str | None
-    value: StateType
+    state: StateType
+
+    @classmethod
+    def from_dict(cls, raw_data: dict[str, Any]) -> CoAPObserveValue:
+        """Factory method to parse a raw JSON observe value payload cleanly."""
+        return cls(
+            id=raw_data.get("id"),
+            state=raw_data.get("value", None)
+        )
 
 @dataclass
 class CoAPObserveResponse:
@@ -180,7 +187,7 @@ class CoAPObserveResponse:
         sensors = device.sensors if device.sensors else []
         return cls(
             id=device.id,
-            sensors=[CoAPObserveValue(id=sensor.id, value=sensor.state) for sensor in sensors]
+            sensors=[CoAPObserveValue(id=sensor.id, state=sensor.state) for sensor in sensors]
         )
 
     @classmethod
@@ -188,7 +195,7 @@ class CoAPObserveResponse:
         """Convert a CoAPObserveResponse instance back to a dictionary."""
         return {
             "id": response.id,
-            "sensors": [{"id": sensor.id, "value": sensor.value} for sensor in response.sensors],
+            "sensors": [{"id": sensor.id, "value": sensor.state} for sensor in response.sensors],
         }
 
 @dataclass
@@ -203,5 +210,5 @@ class CoAPObserveRequest:
         """Factory method to parse a raw JSON observe request payload cleanly."""
         return cls(
             id=raw_data.get("id"),
-            sensors=raw_data.get("sensors", [])
+            sensors=[CoAPObserveValue.from_dict(sensor) for sensor in raw_data.get("sensors", [])]
         )

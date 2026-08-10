@@ -1,7 +1,7 @@
 """Integration 101 Template integration using DataUpdateCoordinator."""
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
@@ -18,7 +18,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
-from .models import CoAPDevice, CoAPSensor, CoAPObserveResponse
+from .models import CoAPDevice, CoAPSensor, CoAPObserveResponse, CoAPObserveRequest, CoAPObserveValue
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class ExampleAPIData:
 
     controller_name: str
     devices: list[CoAPDevice]
+    coap_notify_callback: Callable[[str, int], Callable] | None = field(default=None, repr=False)
 
 
 class ExampleCoordinator(DataUpdateCoordinator):
@@ -86,7 +87,9 @@ class ExampleCoordinator(DataUpdateCoordinator):
 
         return ExampleAPIData(
             controller_name=self.name,
-            devices=devices)
+            devices=devices,
+            coap_notify_callback=self.data.coap_notify_callback if self.data else None
+        )
 
     async def _async_restore_devices(self) -> list[CoAPDevice]:
         """Load previously known devices from storage."""
@@ -153,6 +156,7 @@ class ExampleCoordinator(DataUpdateCoordinator):
             ExampleAPIData(
                 controller_name=self.name,
                 devices=devices,
+                coap_notify_callback=self.data.coap_notify_callback if self.data else None
             ) # pyright: ignore[reportArgumentType]
         )
         self._async_save_devices()
@@ -180,6 +184,8 @@ class ExampleCoordinator(DataUpdateCoordinator):
                             existing_sensor.state = sensor.state
                             matched_sensor_ids.append(sensor.id)
                             sensor_found = True
+                            if self.data.coap_notify_callback is not None:
+                                self.data.coap_notify_callback(device.id, sensor.id)
                             break
                     if not sensor_found:
                         unmatched_sensor_ids.append(sensor.id)
@@ -206,12 +212,11 @@ class ExampleCoordinator(DataUpdateCoordinator):
             )
 
         if updated:
-            if device.notify_callback is not None:
-                device.notify_callback()
             self.async_set_updated_data(
                 ExampleAPIData(
                     controller_name=self.name,
                     devices=devices,
+                    coap_notify_callback=self.data.coap_notify_callback if self.data else None
                 ) # pyright: ignore[reportArgumentType]
             )
             # Maybe remove this one, we might not need this one...
@@ -223,6 +228,15 @@ class ExampleCoordinator(DataUpdateCoordinator):
 # Public methods called by the CoAP API to push data into the coordinator
 #
 #
+
+    def async_add_notifyer(self, listener) -> callable:
+        """Add a listener to the coordinator."""
+        self.data.coap_notify_callback = listener
+        return self.async_unregister_notifyer
+
+    def async_unregister_notifyer(self) -> None:
+        """Remove a listener from the coordinator."""
+        self.data.coap_notify_callback = None
 
     def async_remove_device(self, device_id: str) -> bool:
         """Remove a device (e.g. deleted via the UI) from the coordinator and storage."""
@@ -238,6 +252,7 @@ class ExampleCoordinator(DataUpdateCoordinator):
             ExampleAPIData(
                 controller_name=self.name,
                 devices=devices,
+                coap_notify_callback=self.data.coap_notify_callback if self.data else None
             ) # pyright: ignore[reportArgumentType]
         )
         self._async_save_devices()
@@ -300,11 +315,11 @@ class ExampleCoordinator(DataUpdateCoordinator):
         _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
         return None
 
-    def get_subscribe_data(self, device: CoAPDevice, notify_callback) -> CoAPObserveResponse:
+    def get_subscribe_data(self, device_id: str, sensor_id: int) -> CoAPObserveResponse | None:
         """Return True if a sensor is  notify_callback subscribed to the coordinator."""
-        for i, device in enumerate(self.data.devices):
-            if device.id == device.id and device.notify_callback is None:
-                self.data.devices[i].notify_callback = notify_callback
 
-        device = self.get_device_by_id(device_id=device.id)
-        return CoAPObserveResponse.from_device(device, )
+        sensor = self.get_sensor_by_id(device_id, sensor_id)
+        if not sensor:
+            _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
+            return None
+        return CoAPObserveResponse(id=device_id, sensors=[CoAPObserveValue(id=sensor.id, state=sensor.state)])
