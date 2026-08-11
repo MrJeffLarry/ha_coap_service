@@ -8,7 +8,6 @@ from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_HOST,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
 )
@@ -42,12 +41,11 @@ class ExampleCoordinator(DataUpdateCoordinator):
         """Initialize coordinator."""
         # Set variables from values entered in config flow setup
         self.hass = hass
-        self.host = config_entry.data[CONF_HOST]
         self.port = config_entry.data[CONF_PORT]
         self.name = f"{DOMAIN} ({config_entry.unique_id})"
         self.entry_id = config_entry.entry_id
 
-        _LOGGER.info(f"Initializing {self.name} with host {self.host}:{self.port} devices {config_entry}")
+        _LOGGER.info(f"Initializing {self.name} with host 0.0.0.0:{self.port} devices {config_entry}")
 
         # set variables from options.  You need a default here incase options have not been set
         self.poll_interval = config_entry.options.get(
