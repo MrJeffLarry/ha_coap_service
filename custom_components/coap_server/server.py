@@ -30,7 +30,6 @@ class CoAPServer:
 
     def __init__(
         self,
-        host: str,
         port: int,
         hass,
         coordinator,
@@ -39,7 +38,6 @@ class CoAPServer:
         psk_key: str | None = None) -> None:
         """Initialise services."""
         self.hass = hass
-        self.host = host
         self.port = port
         self.coordinator = coordinator
         self.use_dtls = use_dtls
@@ -48,6 +46,11 @@ class CoAPServer:
 
     async def setup_services(self) -> Context:
         """Setup CoAP server and register services."""
+
+        # Pre-load modules that perform blocking disk I/O on import (like filelock)
+        # inside an executor thread pool to avoid event loop warnings.
+        await self.hass.async_add_executor_job(self._preload_dependencies)
+
         root = resource.Site()
         root.add_resource(["whoami"], WhoAmI(self.hass, self.coordinator))
         root.add_resource(["device"], EndpointDevice(self.hass, self.coordinator))
@@ -88,14 +91,24 @@ class CoAPServer:
             # coaps:// (DTLS-secured) rather than plain coap://.
             transports = ["tinydtls_server"]
 
+        _LOGGER.info("Starting CoAP server on %s:%d (DTLS: %s)", "0.0.0.0", self.port, self.use_dtls)
+
         return await Context.create_server_context(
             root,
-            bind=(self.host, self.port),
+            bind=("0.0.0.0", self.port),
             server_credentials=server_credentials,
             transports=transports,
         )  # 5683 (or 5684 for coaps://)
 
-#        self.hass.data[DOMAIN][self.config_entry.entry_id][COAP_CONTEXT] = context
+    @staticmethod
+    def _preload_dependencies() -> None:
+        """Pre-load libraries that perform blocking filesystem probes on import."""
+        try:
+            import filelock  # noqa: F401
+        except ImportError:
+            pass
+        import aiocoap.defaults
+        import aiocoap.protocol
 
 
 class WhoAmI(resource.Resource):

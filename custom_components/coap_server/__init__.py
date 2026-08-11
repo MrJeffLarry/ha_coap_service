@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.device_registry import DeviceEntry
@@ -55,7 +55,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) ->
     )
 
     server = CoAPServer(
-        coordinator.host,
         coordinator.port,
         hass,
         coordinator,
@@ -76,6 +75,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) ->
     # Setup platforms (based on the list of entity types in PLATFORMS defined above)
     # This calls the async_setup method in each of your entity type files.
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+
+    # setup event listeners
+    async def on_hass_stop(event: Event) -> None:
+        """Handle incoming stop event from Home Assistant."""
+        await coap_context.shutdown()
+
+    config_entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, on_hass_stop)
+    )
 
     # Return true to denote a successful setup.
     return True

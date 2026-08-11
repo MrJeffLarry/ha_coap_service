@@ -13,7 +13,6 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.const import (
-    CONF_HOST,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
 )
@@ -34,7 +33,6 @@ _LOGGER = logging.getLogger(__name__)
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_PORT, description={"suggested_value": 5683}): int,
-        vol.Required(CONF_HOST, description={"suggested_value": "127.0.0.1"}): str,
         vol.Optional(CONF_USE_DTLS, default=False): bool,
         vol.Optional(CONF_PSK_IDENTITY, description={"suggested_value": ""}): str,
         vol.Optional(CONF_PSK_KEY, description={"suggested_value": ""}): str,
@@ -58,7 +56,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         except ImportError as err:
             raise DTLSNotAvailable from err
 
-    return {"title": f"{data[CONF_HOST]}:{data[CONF_PORT]}"}
+    return {"title": f"CoAP Server on :{data[CONF_PORT]}"}
 
 
 class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -131,7 +129,6 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                user_input[CONF_HOST] = config_entry.data[CONF_HOST]
                 if not user_input.get(CONF_PSK_KEY):
                     # Preserve the existing PSK if the user left it blank
                     # (e.g. only toggling DTLS on/off).
