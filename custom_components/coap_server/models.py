@@ -72,7 +72,7 @@ class CoAPSensorConvert:
 class CoAPSensor:
     """Structured representation of a CoAP node sensor."""
 
-    id: int | str
+    id: int | None
     state: StateType
     name: str | None = None
     type: SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | None = None
@@ -163,14 +163,19 @@ class CoAPDevice:
 class CoAPObserveValue:
     """Structured representation of a CoAP observe value."""
 
-    id: str | None
+    id: int | None
     state: StateType
 
     @classmethod
-    def from_dict(cls, raw_data: dict[str, Any]) -> CoAPObserveValue:
+    def from_dict(cls, raw_data: dict[Any, Any]) -> CoAPObserveValue:
         """Factory method to parse a raw JSON observe value payload cleanly."""
+        id=raw_data.get("id")
+        if id is None:
+            raise ValueError("Observe value must contain an 'id' field.")
+        if not isinstance(id, int):
+            raise ValueError(f"Observe value 'id' must be an integer, got {type(id).__name__}.")
         return cls(
-            id=raw_data.get("id"),
+            id=int(id),
             state=raw_data.get("value", None)
         )
 

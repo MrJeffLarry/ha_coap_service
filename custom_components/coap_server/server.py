@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import collections
+from sched import scheduler
 
 from aiocoap import Context, Message, error, resource
 from aiocoap.credentials import DTLS as DTLSCredential
@@ -204,12 +205,12 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         super().__init__()
         self.hass = hass
         self.coordinator = coordinator
-        self.handle = None
         self.device_id = None
         # Maps device_id -> set of observation keys
         self.device_observers = collections.defaultdict(set)
         # Maps observation key -> actual aiocoap ServerObservation object
         self.observations = {}
+        self.handle: dict[str, asyncio.TimerHandle] = {}
 
         # Register the callback with the coordinator on init
         # This assumes your coordinator can call: callback(device_id)
@@ -223,8 +224,8 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
             return
 
         # 1. Look for the 'id' parameter inside the URI query string
-        device_id = None
-        sensor_id = None
+        device_id: str|None = None
+        sensor_id: int|None = None
         uri = request.get_request_uri() # Returns something like 'id=device_123'
         query_string = request.opt.uri_query if request.opt else None
 
@@ -232,9 +233,12 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         for query in query_string or []:
             if query.startswith("id="):
-                device_id = query.split("=", 1)[1]
+                device_id = str(query.split("=", 1)[1])
             elif query.startswith("sensor_id="):
-                sensor_id = query.split("=", 1)[1]
+                try:
+                    sensor_id = int(query.split("=", 1)[1])
+                except ValueError:
+                    _LOGGER.error("Invalid sensor_id value: %s", query.split("=", 1)[1])
 
         _LOGGER.debug("Extracted device_id: %s, sensor_id: %s", device_id, sensor_id)
 
@@ -242,38 +246,58 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
             _LOGGER.error("Rejected observation request: No 'id' parameter found in URI query string.")
             return
 
-        unique_key = f"{device_id}:{sensor_id[0]}"
+        unique_key = f"{device_id}:{sensor_id}"
 
         # Generate a unique key for this specific connection
         key = ObservationKey(request.token, request.remote)
 
-        if unique_key:
-            self.device_observers[unique_key].add(key)
-            self.observations[key] = server_observation
+        self.device_observers[unique_key].add(key)
+        self.observations[key] = server_observation
 
-            # 3. Clean up when the client cancels or disconnects
-            def on_observation_cancelled():
-                _LOGGER.debug("Observation cancelled for client %s on device %s", request.remote, device_id)
-                # send disconnect message to device if needed
-                response = Message(payload=b"Observation cancelled", content_format=ContentFormat.TEXT)
+        # Start the 5-second recurring notification loop
+        self.reschedule(device_id=device_id, sensor_id=sensor_id)
 
-                obs = self.observations.get(key)
-                if obs:
-                    obs.trigger(response)
+        # 3. Clean up when the client cancels or disconnects
+        def on_observation_cancelled():
+            _LOGGER.debug("Observation cancelled for client %s on device %s", request.remote, device_id)
 
-                self.device_observers[device_id].discard(key)
-                self.observations.pop(key, None)
-                if not self.device_observers[device_id]:
-                    del self.device_observers[device_id]
+            # Cancel the pending 5-second timer handle to stop looping
+            timer_handle = self.handle.pop(unique_key, None)
+            if timer_handle:
+                timer_handle.cancel()
 
-            # In aiocoap, accept() is enough to handle all teardown/cancellation scenarios
-            server_observation.accept(on_observation_cancelled)
+            # send disconnect message to device if needed
+            response = Message(payload=b"Observation cancelled", content_format=ContentFormat.TEXT)
+
+            obs = self.observations.get(key)
+            if obs:
+                obs.trigger(response)
+
+            self.device_observers[device_id].discard(key)
+            self.observations.pop(key, None)
+            if not self.device_observers[device_id]:
+                del self.device_observers[device_id]
+
+        # In aiocoap, accept() is enough to handle all teardown/cancellation scenarios
+        server_observation.accept(on_observation_cancelled)
 #            server_observation.register_errback(lambda _: on_observation_cancelled())
 #            server_observation.accept(on_observation_cancelled)
 
-    def notify(self, device_id=None, sensor_id=None):
+    def reschedule(self, device_id: str|None=None, sensor_id: int|None=None):
+        unique_key = f"{device_id}:{sensor_id}"
+
+        # Cancel any existing active timer to prevent duplicate overlapping schedules
+        if unique_key in self.handle:
+            self.handle[unique_key].cancel()
+
+        self.handle[unique_key] = asyncio.get_running_loop().call_later(
+            30,
+            self.notify, device_id, sensor_id)
+
+    def notify(self, device_id: str|None=None, sensor_id: int|None=None):
         """Triggers updates ONLY for clients registered to this device_id."""
         _LOGGER.debug("Targeted notify for device %s", device_id)
+
         unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id else None
         if not unique_key or unique_key not in self.device_observers:
              return
@@ -283,13 +307,19 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         sub_data = self.coordinator.get_subscribe_data(device_id, sensor_id)
         _LOGGER.debug("Subscribe data: %s", sub_data)
+
+        self.reschedule(device_id=device_id, sensor_id=sensor_id)
+
+        if sub_data is None:
+            _LOGGER.warning("No subscribe data found for device %s and sensor %s", device_id, sensor_id)
+            return
+
         response = Message(
             code=Code.CONTENT,
             payload=json.dumps(CoAPObserveResponse.to_dict(sub_data)).encode("utf-8"),
             content_format=ContentFormat.JSON
         )
 #         response = Message(payload=payload, content_format=ContentFormat.TEXT)
-
         # Loop through and update only the subscribers tied to this device_id
         for key in list(self.device_observers[unique_key]):
             obs = self.observations.get(key)
