@@ -54,7 +54,6 @@ class CoAPServer:
         root = resource.Site()
         root.add_resource(["whoami"], WhoAmI(self.hass, self.coordinator))
         root.add_resource(["device"], EndpointDevice(self.hass, self.coordinator))
-        root.add_resource(["device", "data"], EndpointDeviceData(self.hass, self.coordinator))
         root.add_resource(["device", "observe"], EndpointDeviceObserveEntity(self.hass, self.coordinator))
 
         server_credentials = None
@@ -185,27 +184,9 @@ class EndpointDevice(resource.Resource):
             return Message(code=Code.BAD_REQUEST, payload=err)
 
         if self.coordinator.push_device_data(device):
-            return Message(code=Code.CREATED)
+            return Message(code=Code.CREATED, payload=b"Device registered successfully")
 
-        return Message(code=Code.CHANGED)  # or 2.04 if you want to swallow it temporarily
-
-    async def render_put(self, request: message.Message):
-        device, err = json_pare(request.payload)
-        if err is not None:
-            return Message(code=Code.BAD_REQUEST, payload=err)
-
-        if self.coordinator.update_device_data(device):
-            return Message(code=Code.CHANGED)
-
-        return Message(code=Code.NOT_FOUND, payload=b"Device not found")
-
-
-# device send data to HA, send back register new device if not exist
-class EndpointDeviceData(resource.Resource):
-    def __init__(self, hass, coordinator):
-        super().__init__()
-        self.hass = hass
-        self.coordinator = coordinator
+        return Message(code=Code.CHANGED, payload=b"Device updated successfully")  # or 2.04 if you want to swallow it temporarily
 
     async def render_put(self, request: message.Message):
         device, err = json_pare(request.payload)
@@ -213,7 +194,7 @@ class EndpointDeviceData(resource.Resource):
             return Message(code=Code.BAD_REQUEST, payload=err)
 
         if self.coordinator.update_device_data(device):
-            return Message(code=Code.CHANGED)
+            return Message(code=Code.CHANGED, payload=b"Device updated successfully")
 
         return Message(code=Code.NOT_FOUND, payload=b"Device not found")
 
