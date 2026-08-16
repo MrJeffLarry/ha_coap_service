@@ -17,7 +17,6 @@ from homeassistant.core import HomeAssistant
 
 from .models import CoAPDevice, CoAPObserveRequest, CoAPObserveResponse
 from .const import DOMAIN
-from .proto.coap_pb2 import 
 
 _LOGGER = logging.getLogger(__name__)
 
