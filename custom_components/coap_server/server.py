@@ -181,9 +181,13 @@ class EndpointDevice(resource.Resource):
 
     # New device, get information about it and all its sensors to publich to HA
     async def render_post(self, request: message.Message):
-        device, err = json_pare(request.payload)
-        if err is not None:
+        # device, err = json_pare(request.payload)
+        try:
+            device = CoAPDevice.from_coap_raw_new_proto(request.payload)
+        except Exception as err:
             return Message(code=Code.BAD_REQUEST, payload=err)
+        #if err is not None:
+            #return Message(code=Code.BAD_REQUEST, payload=err)
 
         if self.coordinator.push_device_data(device):
             return Message(code=Code.CREATED, payload=b"Device registered successfully")
@@ -191,8 +195,13 @@ class EndpointDevice(resource.Resource):
         return Message(code=Code.CHANGED, payload=b"Device updated successfully")  # or 2.04 if you want to swallow it temporarily
 
     async def render_put(self, request: message.Message):
-        device, err = json_pare(request.payload)
-        if err is not None:
+        #device, err = json_pare(request.payload)
+        #if err is not None:
+            #return Message(code=Code.BAD_REQUEST, payload=err)
+        
+        try:
+            device = CoAPDevice.from_coap_raw_update_proto(request.payload)
+        except Exception as err:
             return Message(code=Code.BAD_REQUEST, payload=err)
 
         if self.coordinator.update_device_data(device):
