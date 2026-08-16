@@ -1,24 +1,29 @@
-from enum import StrEnum
-from dataclasses import dataclass, field
 
-class OneClass(StrEnum):
-    # On means low, Off means normal
-    OneBat = "battery"
+import custom_components.coap_server.coap_pb2 as coap_pb2
 
-class TwoClass(StrEnum):
-    # On means low, Off means normal
-    TwoBat = "battery"
+device = coap_pb2.NewDevice()
+device.version = 1
+device.id = "device_123"
 
-@dataclass
-class FixtureSensor:
-    """Device sensor."""
-    id: str
-    one: type | None = None
-    two: type | None = None
+print("Device object:")
+print(device)
 
-sensor = FixtureSensor(id="sensor_1", one=OneClass.OneBat, two=OneClass)
+print("Serialized device (bytes):")
+dev = device.SerializeToString()
+print(dev)
 
-if isinstance(sensor.one, sensor.two):
-    print(f"Sensor is of type %s" % type(sensor.one).__name__)
-elif isinstance(sensor.one, sensor.two):
-    print(f"Sensor is of type %s" % type(sensor.one).__name__)
+print("Serialized device (hex):")
+hex = device.SerializeToString().hex()
+print(hex)
+
+print("Deserialized device object:")
+newdevice = coap_pb2.NewDevice()
+newdevice.ParseFromString(dev)
+print(newdevice)
+
+print("Deserialized device (hex):")
+new2device = coap_pb2.NewDevice()
+new2device.ParseFromString(bytes.fromhex(hex))
+print(new2device)
+
+print(coap_pb2.EntityType.ENTITY_TYPE_UNSPECIFIED)

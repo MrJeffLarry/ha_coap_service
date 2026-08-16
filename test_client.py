@@ -3,7 +3,17 @@ import json
 import random
 import argparse
 
+import custom_components.coap_server.coap_pb2 as coap_pb2
 from aiocoap import *
+
+def enum_value(msg, field_name, enum_name):
+    """Return the integer for the enum name of a field,
+       or None if the field does not exist, is not an enum, or the
+       enum does not have a value with the supplied name."""
+    field = msg.DESCRIPTOR.fields_by_name.get(field_name,None)
+    if field and field.enum_type:
+        enum = field.enum_type.values_by_name.get(enum_name,None)
+        return enum and enum.number
 
 # device classes aka sensor types can be found here:
 # https://developers.home-assistant.io/docs/core/entity/sensor/
@@ -12,20 +22,34 @@ async def send_update_request(device_id: str, port: int, address: str):
     # 1. Create a client context
     protocol = await Context.create_client_context()
 
+    device = coap_pb2.UpdateDevice()
+    device.id = device_id
+    device.entities.add(id=1, value=random.randint(19, 25) + random.random()/10)  # temperature
+    device.entities.add(id=2, value=random.randint(40, 50))  # humidity
+    device.entities.add(id=3, value=random.randint(70, 80))  # battery
+    device.entities.add(id=4, value=random.randint(100, 1000))  # light
+    device.entities.add(id=5, value=random.randint(0, 1))  # motion
+    device.entities.add(id=6, value=random.randint(0, 1))
+
     # 2. Define the exact payload that matches your server expectations
     payload = {
         "id": device_id,
-        "sensors": [
+        "entities": [
             {"id": 1, "value": random.randint(19, 25) + random.random()/10},  # temperature
             {"id": 2, "value": random.randint(40, 50)},  # humidity
             {"id": 3, "value": random.randint(70, 80)},  # battery
-            {"id": 4, "value": random.randint(0, 1)},  # motion
+            {"id": 4, "value": random.randint(100, 1000)},  # light
+            {"id": 5, "value": random.randint(0, 1)},  # motion
+            {"id": 6, "value": random.randint(0, 1)},  # switch
         ],
     }
+    payload = json.dumps(payload).encode("utf-8")
+
+    payload = device.SerializeToString()
 
     # 3. Create the PUT request
     # NOTE: The path '/sensors/device001/data' matches your tree structure
-    request = Message(code=PUT, payload=json.dumps(payload).encode("utf-8"))
+    request = Message(code=PUT, payload=payload)
     request.set_request_uri(f"coap://{address}:{port}/device")
 
     print("Sending request...")
@@ -45,14 +69,51 @@ async def send_new_request(device_id: str, port: int, address: str):
     # 1. Create a client context
     protocol = await Context.create_client_context()
 
+    device = coap_pb2.NewDevice()
+    device.id = device_id
+    device.manufacturer = "Acme Corp"
+    device.model = "Model PETA"
+    device.fw_version = "1.0.0"
+    device.hw_version = "1.0.0"
+    device.entities.add(id=1, name="Temperature", value=random.randint(19, 25) + random.random()/10,
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+        sub_type="temperature",
+        unit="°C"
+    )
+    device.entities.add(id=2, name="Humidity", value=random.randint(40, 50),
+        unit="%",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+        sub_type="humidity"
+    )
+    device.entities.add(id=3, name="Battery", value=random.randint(70, 80),
+        unit="%",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+        sub_type="battery"
+    )
+    device.entities.add(id=4, name="Light", value=random.randint(100, 200),
+        unit="lx",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+        sub_type="illuminance"
+    )
+    device.entities.add(id=5, name="Motion", value=random.randint(0, 1),
+        unit="",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_BINARY'),
+        sub_type="motion"
+    )
+    device.entities.add(id=6, name="Switch", value=random.randint(0, 1),
+        unit="",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SWITCH'),
+        sub_type="switch"
+    )
+
     # 2. Define the exact payload that matches your server expectations
-    payload = {
+    payload_json = {
         "id": "device001",
         "manufacturer": "Acme Corp",
         "model": "Model PETA",
         "fw_version": "1.0.0",
         "hw_version": "1.0.0",
-        "sensors": [
+        "entities": [
             {"id": 1, "name": "Temperature", "unit": "°C", "type": "sensor", "sub_type": "temperature", "value": random.randint(19, 25) + random.random()/10},
             {"id": 2, "name": "Humidity", "unit": "%", "type": "sensor", "sub_type": "humidity", "value": random.randint(40, 50)},
             {"id": 3, "name": "Battery", "unit": "%", "type": "sensor", "sub_type": "battery", "value": random.randint(70, 80)},
@@ -61,10 +122,12 @@ async def send_new_request(device_id: str, port: int, address: str):
             {"id": 6, "name": "Switch",  "unit": "", "type": "switch", "sub_type": "switch", "value": random.randint(0, 1)},
         ],
     }
+    payload = json.dumps(payload_json).encode("utf-8")
 
+    payload: bytes = device.SerializeToString()
     # 3. Create the PUT request
     # NOTE: The path '/sensors/device001/data' matches your tree structure
-    request = Message(code=POST, payload=json.dumps(payload).encode("utf-8"))
+    request = Message(code=POST, payload=payload)
     request.set_request_uri(f"coap://{address}:{port}/device")
 
     print("Sending request...")

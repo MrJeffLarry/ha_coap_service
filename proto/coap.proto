@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+enum EntityType {
+  ENTITY_TYPE_UNSPECIFIED = 0;
+  ENTITY_TYPE_SENSOR = 1;
+  ENTITY_TYPE_BINARY_SENSOR = 2;
+  ENTITY_TYPE_SWITCH = 3;
+  ENTITY_TYPE_LIGHT = 4;
+}
+
+message NewEntity {
+  uint32 id = 1;
+  double value = 2;
+  EntityType type = 3;
+  string sub_type = 4;
+  string unit = 5;
+  optional string name = 6;
+}
+
+/* Airfan sensor telemetry message */
+message NewDevice {
+  uint32 version = 1; /* message schema version */
+  string id = 2;
+  repeated NewEntity entities = 3;
+  optional string manufacturer = 4;
+  optional string model = 5;
+  optional string fw_version = 6;
+  optional string hw_version = 7;
+}
+
+message EntityValue {
+  uint32 id = 2;
+  double value = 3;
+}
+
+message UpdateDevice {
+  uint32 version = 1; /* message schema version */
+  string id = 2;
+  repeated EntityValue entities = 3;
+}
+
+message ObserveDevice {
+  uint32 version = 1; /* message schema version */
+  string id = 2;
+  repeated uint32 entity_ids = 3;
+}
+
+message ObserveDeviceResponse {
+  uint32 version = 1; /* message schema version */
+  repeated EntityValue entities = 2;
+}

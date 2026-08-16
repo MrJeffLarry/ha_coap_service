@@ -1,5 +1,6 @@
 """Data models shared across the ha_coap_service integration."""
-
+import logging
+from calendar import c
 from dataclasses import dataclass, field
 from typing import Callable, Any
 from enum import StrEnum
@@ -9,6 +10,10 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.helpers.typing import StateType
 from homeassistant.components.switch import SwitchDeviceClass
 from homeassistant.helpers.typing import StateType
+
+from . import coap_pb2 as coap_pb2
+
+_LOGGER = logging.getLogger(__name__)
 
 def _coerce_binary_state(value) -> bool:
     """Coerce an incoming raw sensor value into a bool for binary sensors."""
@@ -20,16 +25,6 @@ def _coerce_binary_state(value) -> bool:
         return value.strip().lower() in ("1", "true", "on", "open", "yes", "detected")
     return bool(value)
 
-class CoAPSensorType(StrEnum):
-    """High-level device types reported by the CoAP node."""
-
-    SENSOR = "sensor"
-    BINARY_SENSOR = "binary"
-    SWITCH = "switch"
-    LIGHT = "light"
-    OTHER = "other"
-
-
 def _safe_enum_lookup(enum_cls: type[Any], value: str | None) -> Any | None:
     """Safely convert a string to a Home Assistant DeviceClass enum, avoiding ValueError crashes."""
     if not value:
@@ -39,32 +34,56 @@ def _safe_enum_lookup(enum_cls: type[Any], value: str | None) -> Any | None:
     except ValueError:
         return None
 
+def _find_enum_value(enum_cls: Any, possible_names: list[str]) -> int | None:
+    """Safely find an enum integer value from a list of candidate names."""
+    for name in possible_names:
+        try:
+            if hasattr(enum_cls, name):
+                return int(getattr(enum_cls, name))
+        except (ValueError, AttributeError):
+            continue
+    return None
 
 class CoAPSensorConvert:
     """Centralized registry for converting CoAP types to Home Assistant device classes.
 
-    To expand in the future, simply add a new rule to this dictionary.
+    Uses safe dynamic lookup to prevent protobuf attribute errors on import.
     """
 
-    _CONVERTERS: dict[CoAPSensorType, Callable[[str | None], Any]] = {
-        CoAPSensorType.SENSOR: lambda sub: _safe_enum_lookup(SensorDeviceClass, sub),
-        CoAPSensorType.BINARY_SENSOR: lambda sub: _safe_enum_lookup(BinarySensorDeviceClass, sub),
-        CoAPSensorType.SWITCH: lambda sub: _safe_enum_lookup(SwitchDeviceClass, sub),
-        CoAPSensorType.LIGHT: lambda _: None,   # Handled by light platform if needed
-        CoAPSensorType.OTHER: lambda _: None,
-    }
+    @classmethod
+    def _get_converters(cls) -> dict[int, Callable[[str | None], Any]]:
+        """Dynamically build converter map using resolved protobuf enum values."""
+        converters = {}
+
+        sensor_val = _find_enum_value(coap_pb2.EntityType, ["SENSOR", "ENTITY_SENSOR", "ENTITY_TYPE_SENSOR"])
+        if sensor_val is not None:
+            converters[sensor_val] = lambda sub: _safe_enum_lookup(SensorDeviceClass, sub)
+
+        binary_val = _find_enum_value(coap_pb2.EntityType, ["BINARY_SENSOR", "ENTITY_BINARY_SENSOR", "ENTITY_TYPE_BINARY_SENSOR"])
+        if binary_val is not None:
+            converters[binary_val] = lambda sub: _safe_enum_lookup(BinarySensorDeviceClass, sub)
+
+        switch_val = _find_enum_value(coap_pb2.EntityType, ["SWITCH", "ENTITY_SWITCH", "ENTITY_TYPE_SWITCH"])
+        if switch_val is not None:
+            converters[switch_val] = lambda sub: _safe_enum_lookup(SwitchDeviceClass, sub)
+
+        light_val = _find_enum_value(coap_pb2.EntityType, ["LIGHT", "ENTITY_LIGHT", "ENTITY_TYPE_LIGHT"])
+        if light_val is not None:
+            converters[light_val] = lambda _: None
+
+        unspecified_val = _find_enum_value(coap_pb2.EntityType, ["UNSPECIFIED", "ENTITY_TYPE_UNSPECIFIED", "ZERO"])
+        if unspecified_val is not None:
+            converters[unspecified_val] = lambda _: None
+
+        return converters
 
     @classmethod
     def convert(
-        cls, sensor_type: CoAPSensorType | str, sub_type: str | None = None
+        cls, sensor_type: int, sub_type: str | None = None
     ) -> SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | None:
         """Convert coarse sensor type and sub-type into a native HA Device Class."""
-        try:
-            enum_type = CoAPSensorType(sensor_type)
-        except ValueError:
-            return None
-
-        converter = cls._CONVERTERS.get(enum_type)
+        converters = cls._get_converters()
+        converter = converters.get(sensor_type)
         return converter(sub_type) if converter else None
 
 
@@ -80,18 +99,59 @@ class CoAPSensor:
     state_class: SensorStateClass | None = None
 
     @classmethod
+    def from_coap_update_proto(cls, entity: EntityValue) -> CoAPSensor:
+        """Factory method to parse a CoAP protobuf sensor update payload cleanly."""
+
+        return cls(
+            id=entity.id,
+            state=entity.value,
+            name=None,
+            type=None,
+            unit=None,
+            state_class=None,
+        )
+
+    @classmethod
+    def from_coap_proto(cls, entity: coap_pb2.NewEntity) -> CoAPSensor:
+        """Factory method to parse a CoAP protobuf sensor payload cleanly."""
+
+        return cls(
+            id=entity.id,
+            state=entity.value,
+            name=entity.name,
+            type=CoAPSensorConvert.convert(entity.type, entity.sub_type),
+            unit=entity.unit,
+            state_class=_safe_enum_lookup(SensorStateClass, None),
+        )
+
+    @classmethod
+    def from_coap_raw_proto(cls, raw: bytes|None) -> CoAPSensor:
+        """Factory method to parse a CoAP protobuf sensor payload cleanly."""
+        if raw is None:
+            raise ValueError("Raw protobuf data cannot be None.")
+        entity = coap_pb2.NewEntity()
+        entity.ParseFromString(raw)
+
+        return cls(
+            id=entity.id,
+            state=entity.value,
+            name=entity.name,
+            type=CoAPSensorConvert.convert(entity.type, entity.sub_type),
+            unit=entity.unit,
+            state_class=_safe_enum_lookup(SensorStateClass, None),
+        )
+
+    @classmethod
     def from_dict(cls, raw_data: dict[str, Any]) -> CoAPSensor:
         """Factory method to parse a raw JSON sensor payload cleanly."""
         sensor_type_str = raw_data.get("type")
         sub_type = raw_data.get("sub_type")
 
-        resolved_device_class = CoAPSensorConvert.convert(sensor_type_str, sub_type)
-
         return cls(
             id=raw_data.get("id"),
             state=raw_data.get("value"),
             name=raw_data.get("name"),
-            type=resolved_device_class,
+            type=CoAPSensorConvert.convert(sensor_type_str, sub_type),
             unit=raw_data.get("unit"),
             state_class=_safe_enum_lookup(SensorStateClass, raw_data.get("state_class")),
         )
@@ -100,13 +160,13 @@ class CoAPSensor:
     def to_dict(cls, sensor: CoAPSensor) -> dict[str, Any]:
         """Convert a CoAPSensor instance back to a dictionary."""
         # Determine the coarse category type based on what class the device class belongs to
-        sensor_type_str = CoAPSensorType.OTHER.value  # Default to "other"
+        sensor_type_str = "sensor"  # Default to "other"
         if isinstance(sensor.type, SensorDeviceClass):
-            sensor_type_str = CoAPSensorType.SENSOR.value
+            sensor_type_str = "sensor"
         elif isinstance(sensor.type, BinarySensorDeviceClass):
-            sensor_type_str = CoAPSensorType.BINARY_SENSOR.value
+            sensor_type_str = "binary_sensor"
         elif isinstance(sensor.type, SwitchDeviceClass):
-            sensor_type_str = CoAPSensorType.SWITCH.value
+            sensor_type_str = "switch"
 
         return {
             "id": sensor.id,
@@ -130,6 +190,44 @@ class CoAPDevice:
     sw_version: str | None = None
     hw_version: str | None = None
     sensors: list[CoAPSensor] = field(default_factory=list)
+
+    @classmethod
+    def from_coap_raw_update_proto(cls, raw: bytes|None) -> CoAPDevice:
+        """Factory method to parse a CoAP protobuf device update payload cleanly."""
+        if raw is None:
+            raise ValueError("Raw protobuf data cannot be None.")
+        proto_device = coap_pb2.UpdateDevice()
+        proto_device.ParseFromString(raw)
+
+        return cls(
+            id=proto_device.id,
+            unique_id=None,
+            name=None,
+            model=None,
+            manufacturer=None,
+            sw_version=None,
+            hw_version=None,
+            sensors=[CoAPSensor.from_coap_update_proto(entity) for entity in proto_device.entities],
+        )
+
+    @classmethod
+    def from_coap_raw_new_proto(cls, raw: bytes|None) -> CoAPDevice:
+        """Factory method to parse a CoAP protobuf device payload cleanly."""
+        if raw is None:
+            raise ValueError("Raw protobuf data cannot be None.")
+        proto_device = coap_pb2.NewDevice()
+        proto_device.ParseFromString(raw)
+
+        return cls(
+            id=proto_device.id,
+            unique_id=proto_device.id,
+            name=proto_device.id,
+            model=proto_device.model,
+            manufacturer=proto_device.manufacturer,
+            sw_version=proto_device.fw_version,
+            hw_version=proto_device.hw_version,
+            sensors=[CoAPSensor.from_coap_proto(entity) for entity in proto_device.entities],
+        )
 
     @classmethod
     def from_dict(cls, raw_data: dict[str, Any]) -> CoAPDevice:
@@ -165,6 +263,14 @@ class CoAPObserveValue:
 
     id: int | None
     state: StateType
+
+    @classmethod
+    def from_coap_proto(cls, entity: EntityValue) -> CoAPObserveValue:
+        """Factory method to parse a CoAP protobuf observe value payload cleanly."""
+        return cls(
+            id=entity.id,
+            state=entity.value
+        )
 
     @classmethod
     def from_dict(cls, raw_data: dict[Any, Any]) -> CoAPObserveValue:

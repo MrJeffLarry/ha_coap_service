@@ -75,10 +75,12 @@ class CoAPBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         return super().available and self.sensor is not None
 
     @property
-    def device_class(self) -> str:
+    def device_class(self) -> str | None:
         """Return device class."""
-        # https://developers.home-assistant.io/docs/core/entity/binary-sensor#available-device-classes
-        return self.sensor.type.value
+        # https://developers.home-assistant.io/docs/core/entity/sensor/#available-device-classes
+        if self.sensor and self.sensor.type:
+            return self.sensor.type.value
+        return None
 
     @property
     def device_info(self) -> DeviceInfo:
