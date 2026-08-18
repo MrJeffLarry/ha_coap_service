@@ -53,7 +53,7 @@ class CoAPSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self._attr_device_class = sensor.type.value
         self.id = sensor.id
 #        self._unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
-        self._attr_unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
+#        self._attr_unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
         self._attr_device_info = DeviceInfo(
             identifiers={
                 (
@@ -153,3 +153,8 @@ class CoAPSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self._attr_is_on = False
         self.coordinator.update_sensor_data(self.device_id, self.id, False)
         self.async_write_ha_state()
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique id."""
+        return f"{self.device_id}_{self.id}"

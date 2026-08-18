@@ -20,14 +20,10 @@ jobs:
         id: version
         uses: home-assistant/actions/helpers/version@master
 
-      - name: Validate data
+      - name: add version to manifest.json
         run: |
-          manifestversion=$(jq -r '.version' ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json)
-          if [ "$manifestversion" != "${{ steps.version.outputs.version }}" ]; then
-            echo "The version in custom_components/${{ env.COMPOMENT }}/manifest.json was not correct"
-            echo "$manifestversion"
-            exit 1
-          fi
+          jq --arg version "${{ steps.version.outputs.version }}" '.version = $version' ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json > temp_manifest.json
+          mv temp_manifest.json ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json
 
       - name: Create zip file for the integration
         run: |

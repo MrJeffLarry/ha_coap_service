@@ -49,6 +49,7 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
         self._attr_device_class = sensor.type.value
         self.id = sensor.id
         self._unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
+        self._attr_unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -127,6 +128,4 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
     @property
     def unique_id(self) -> str:
         """Return unique id."""
-        # All entities must have a unique id.  Think carefully what you want this to be as
-        # changing it later will cause HA to create new entities.
-        return self._unique_id
+        return f"{self.device_id}_{self.id}"

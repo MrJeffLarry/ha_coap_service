@@ -28,7 +28,7 @@ def async_setup_entity_entry_helper(
                 _LOGGER.info("Adding new device data for sensor: %s type %s match %s", sensor.name, type(sensor.type).__name__, entity_type.__name__)
                 sensors.append(entity_class(coordinator, device, sensor))
             else:
-                _LOGGER.info("Skipping sensor: %s type %s does not match %s", sensor.name, type(sensor.type).__name__, entity_type.__name__)
+                _LOGGER.debug("Skipping sensor: %s type %s does not match %s", sensor.name, type(sensor.type).__name__, entity_type.__name__)
 
     _LOGGER.info(
         "Adding new device data for %s sensors: %s",
@@ -50,7 +50,7 @@ def async_setup_entity_entry_helper(
                 _LOGGER.info("Adding new device data for sensor: %s type %s match %s", sensor.name, type(sensor.type).__name__, entity_type.__name__)
                 new_entities.append(entity_class(coordinator, device, sensor))
             else:
-                _LOGGER.info("Skipping sensor: %s type %s does not match %s", sensor.name, type(sensor.type).__name__, entity_type.__name__)
+                _LOGGER.debug("Skipping sensor: %s type %s does not match %s", sensor.name, type(sensor.type).__name__, entity_type.__name__)
         async_add_entities(new_entities)
 
     # Signal is scoped to this config entry, and the subscription is torn down

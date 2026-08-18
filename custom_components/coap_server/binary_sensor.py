@@ -49,7 +49,8 @@ class CoAPBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         self.model = device.model
         self.sw_version = device.sw_version
         self.id = sensor.id
-        self._unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
+#        self._unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
+#        self._attr_unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -116,6 +117,4 @@ class CoAPBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
     @property
     def unique_id(self) -> str:
         """Return unique id."""
-        # All entities must have a unique id.  Think carefully what you want this to be as
-        # changing it later will cause HA to create new entities.
-        return self._unique_id
+        return f"{self.device_id}_{self.id}"

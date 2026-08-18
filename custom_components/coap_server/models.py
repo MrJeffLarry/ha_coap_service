@@ -309,6 +309,14 @@ class CoAPObserveResponse:
             "sensors": [{"id": sensor.id, "value": sensor.state} for sensor in response.sensors],
         }
 
+    @classmethod
+    def to_proto(cls, response: CoAPObserveResponse) -> bytes | None:
+        """Convert a CoAPObserveResponse instance to a protobuf message."""
+        proto_response = coap_pb2.ObserveDeviceResponse()
+        for sensor in response.sensors:
+            proto_response.entities.add(id=sensor.id if sensor.id is not None else 0, value=sensor.state if sensor.state is not None else "")
+        return proto_response.SerializeToString()
+
 @dataclass
 class CoAPObserveRequest:
     """Structured representation of a CoAP observe request."""
@@ -322,4 +330,17 @@ class CoAPObserveRequest:
         return cls(
             id=raw_data.get("id"),
             sensors=[CoAPObserveValue.from_dict(sensor) for sensor in raw_data.get("sensors", [])]
+        )
+
+    @classmethod
+    def from_proto(cls, raw: bytes | None) -> CoAPObserveRequest:
+        """Factory method to parse a protobuf observe request payload cleanly."""
+        if raw is None:
+            raise ValueError("Raw protobuf data cannot be None.")
+
+        proto = coap_pb2.ObserveDevice()
+        proto.ParseFromString(raw)
+        return cls(
+            id=proto.id,
+            sensors=[sensor.id for sensor in proto.entities]
         )

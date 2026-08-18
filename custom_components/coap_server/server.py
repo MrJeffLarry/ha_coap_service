@@ -1,9 +1,6 @@
 import asyncio
-import datetime
-import json
-import logging
 import collections
-from sched import scheduler
+import logging
 
 from aiocoap import Context, Message, error, resource
 from aiocoap.credentials import DTLS as DTLSCredential
@@ -11,12 +8,9 @@ from aiocoap.credentials import CredentialsMap
 from aiocoap.numbers.codes import Code
 from aiocoap.numbers.contentformat import ContentFormat
 from aiocoap.resource import ObservableResource
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PORT
-from homeassistant.core import HomeAssistant
 
-from .models import CoAPDevice, CoAPObserveRequest, CoAPObserveResponse
 from .const import DOMAIN
+from .models import CoAPDevice, CoAPObserveResponse
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -147,29 +141,18 @@ class WhoAmI(resource.Resource):
             content_format=ContentFormat.TEXT,
         )
 
+def uri_query(request: message.Message) -> dict[str, str] | None:
+    """Extract device_id and sensor_id from the URI query string."""
+    # This function assumes you have access to the request object
+    # If not, you may need to pass it as a parameter
+    request.get_request_uri() # Populates request.opt.uri_query
+    query_string = request.opt.uri_query if request.opt else None
 
-def json_pare(payload: bytes | None) -> tuple[CoAPDevice, bytes | None]:
-    """Parse JSON payload from device and return Device object."""
-    device: CoAPDevice = CoAPDevice(id=None)
-
-    if payload is None:
-        return device, b"Missing payload"
-
-    try:
-        # 1. Decode bytes to string and parse JSON
-        raw_payload = payload.decode("utf-8")
-        data = json.loads(raw_payload)
-        device = CoAPDevice.from_dict(data)
-
-        if device.id is None:
-            return device, b"Missing id in payload"
-        else:
-            return device, None
-
-    except json.JSONDecodeError, UnicodeDecodeError:
-        # If the payload isn"t valid JSON
-        return device, b"could not parse json"
-
+    items: dict[str, str] = {}
+    for query in query_string or []:
+        key, value = query.split("=", 1)
+        items[key] = value
+    return items
 
 # If device does not exist in HA it register here or at startup
 class EndpointDevice(resource.Resource):
@@ -180,24 +163,16 @@ class EndpointDevice(resource.Resource):
 
     # New device, get information about it and all its sensors to publich to HA
     async def render_post(self, request: message.Message):
-        # device, err = json_pare(request.payload)
         try:
             device = CoAPDevice.from_coap_raw_new_proto(request.payload)
         except Exception as err:
             return Message(code=Code.BAD_REQUEST, payload=err)
-        #if err is not None:
-            #return Message(code=Code.BAD_REQUEST, payload=err)
 
         if self.coordinator.push_device_data(device):
-            return Message(code=Code.CREATED, payload=b"Device registered successfully")
-
-        return Message(code=Code.CHANGED, payload=b"Device updated successfully")  # or 2.04 if you want to swallow it temporarily
+            return Message(code=Code.CHANGED, payload=b"Device updated successfully")  # or 2.04 if you want to swallow it temporarily
+        return Message(code=Code.CREATED, payload=b"Device registered successfully")
 
     async def render_put(self, request: message.Message):
-        #device, err = json_pare(request.payload)
-        #if err is not None:
-            #return Message(code=Code.BAD_REQUEST, payload=err)
-        
         try:
             device = CoAPDevice.from_coap_raw_update_proto(request.payload)
         except Exception as err:
@@ -214,12 +189,12 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         super().__init__()
         self.hass = hass
         self.coordinator = coordinator
-        self.device_id = None
         # Maps device_id -> set of observation keys
         self.device_observers = collections.defaultdict(set)
         # Maps observation key -> actual aiocoap ServerObservation object
         self.observations = {}
         self.handle: dict[str, asyncio.TimerHandle] = {}
+        self.keep_alive_interval = 30  # seconds
 
         # Register the callback with the coordinator on init
         # This assumes your coordinator can call: callback(device_id)
@@ -235,19 +210,16 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         # 1. Look for the 'id' parameter inside the URI query string
         device_id: str|None = None
         sensor_id: int|None = None
-        uri = request.get_request_uri() # Returns something like 'id=device_123'
-        query_string = request.opt.uri_query if request.opt else None
-
-        _LOGGER.debug("Query string: %s", query_string)
-
-        for query in query_string or []:
-            if query.startswith("id="):
-                device_id = str(query.split("=", 1)[1])
-            elif query.startswith("sensor_id="):
+        items = uri_query(request)
+        if items:
+            device_id = items.get("id")
+            sensor_id_str = items.get("sensor_id")
+            if sensor_id_str is not None:
                 try:
-                    sensor_id = int(query.split("=", 1)[1])
+                    sensor_id = int(sensor_id_str)
                 except ValueError:
-                    _LOGGER.error("Invalid sensor_id value: %s", query.split("=", 1)[1])
+                    _LOGGER.error("Invalid sensor_id value: %s", sensor_id_str)
+                    return
 
         _LOGGER.debug("Extracted device_id: %s, sensor_id: %s", device_id, sensor_id)
 
@@ -300,7 +272,7 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
             self.handle[unique_key].cancel()
 
         self.handle[unique_key] = asyncio.get_running_loop().call_later(
-            30,
+            self.keep_alive_interval,
             self.notify, device_id, sensor_id)
 
     def notify(self, device_id: str|None=None, sensor_id: int|None=None):
@@ -325,8 +297,8 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         response = Message(
             code=Code.CONTENT,
-            payload=json.dumps(CoAPObserveResponse.to_dict(sub_data)).encode("utf-8"),
-            content_format=ContentFormat.JSON
+            payload=CoAPObserveResponse.to_proto(sub_data),
+            content_format=ContentFormat.OCTETSTREAM
         )
 #         response = Message(payload=payload, content_format=ContentFormat.TEXT)
         # Loop through and update only the subscribers tied to this device_id
@@ -340,6 +312,30 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
     async def render_get(self, request: Message):
         _LOGGER.debug("GET /device/observe %s", request)
+        device_id: str|None = None
+        sensor_id: int|None = None
+        items = uri_query(request)
+        if items:
+            device_id = items.get("id")
+            sensor_id_str = items.get("sensor_id")
+            if sensor_id_str is not None:
+                try:
+                    sensor_id = int(sensor_id_str)
+                except ValueError:
+                    _LOGGER.error("Invalid sensor_id value: %s", sensor_id_str)
+                    return
 
-        payload = datetime.datetime.now().strftime("%Y-%m-%d %H:%M").encode("ascii")
-        return Message(payload=payload, content_format=ContentFormat.TEXT)
+        sub_data = self.coordinator.get_subscribe_data(device_id, sensor_id)
+        _LOGGER.debug("Subscribe data: %s", sub_data)
+
+        self.reschedule(device_id=device_id, sensor_id=sensor_id)
+
+        if sub_data is None:
+            _LOGGER.warning("No subscribe data found for device %s and sensor %s", device_id, sensor_id)
+            return
+
+        return Message(
+            code=Code.CONTENT,
+            payload=CoAPObserveResponse.to_proto(sub_data),
+            content_format=ContentFormat.OCTETSTREAM
+        )

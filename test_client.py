@@ -3,7 +3,7 @@ import json
 import random
 import argparse
 
-import custom_components.coap_server.coap_pb2 as coap_pb2
+import proto.coap_pb2 as coap_pb2
 from aiocoap import *
 
 def enum_value(msg, field_name, enum_name):
@@ -150,16 +150,21 @@ async def send_observe_request(device_id: str, port: int, address: str):
     request.set_request_uri(f"coap://{address}:{port}/device/observe?id={device_id}&sensor_id=6")
 
     print("Sending request...")
+    res = coap_pb2.ObserveDeviceResponse()
 
     try:
         # 4. Send and wait for response
         req = protocol.request(request)
         response = await req.response
+        res.ParseFromString(response.payload)
+
         print(f"Response Code: {response.code}")
-        print(f"Response Payload: {response.payload.decode('utf-8')}")
+        print(f"Response Payload: {res}")
 
         async for notification in req.observation:
-            print(f"Notification: {notification.payload.decode('utf-8')}")
+            notis = coap_pb2.ObserveDeviceResponse()
+            notis.ParseFromString(notification.payload)
+            print(f"Notification: {notis}")
 
 #            req.observation.cancel()
 #            break  # Exit after receiving the first notification for demonstration purposes
