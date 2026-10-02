@@ -194,7 +194,7 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         # Maps observation key -> actual aiocoap ServerObservation object
         self.observations = {}
         self.handle: dict[str, asyncio.TimerHandle] = {}
-        self.keep_alive_interval = 30  # seconds
+        self.keep_alive_interval = 10  # seconds
 
         # Register the callback with the coordinator on init
         # This assumes your coordinator can call: callback(device_id)
