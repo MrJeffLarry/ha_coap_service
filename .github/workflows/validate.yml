@@ -11,6 +11,29 @@ on:
 #    - cron: "0 0 * * *"
 
 jobs:
+  tests:
+    runs-on: ubuntu-latest
+    name: Python tests
+    steps:
+      - name: 📥 Checkout the repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install -r requirements_dev.txt -r requirements_test.txt protobuf
+
+      - name: Run tests
+        run: |
+          python -m pytest -q \
+            custom_components/coap_server/test_models.py \
+            custom_components/coap_server/test_server.py
+
   validate-hassfest:
     runs-on: ubuntu-latest
     name: With hassfest
