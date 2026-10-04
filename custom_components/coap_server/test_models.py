@@ -1,5 +1,12 @@
 import pytest
-from .models import CoAPSensor, CoAPDevice
+from . import coap_pb2
+from .models import (
+    CoAPDevice,
+    CoAPObserveRequest,
+    CoAPObserveResponse,
+    CoAPObserveValue,
+    CoAPSensor,
+)
 
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -102,3 +109,71 @@ def test_coap_device_from_and_to_dict() -> None:
     assert serialized["manufacturer"] == "hagerman"
     assert len(serialized["sensors"]) == 1
     assert serialized["sensors"][0]["sub_type"] == "humidity"
+
+
+def test_coap_device_from_new_proto() -> None:
+    """Test parsing a new device from its protobuf representation."""
+    raw_device = coap_pb2.NewDevice(
+        version=1,
+        id="device002",
+        manufacturer="Acme",
+        model="Sensor Node",
+        fw_version="2.0.0",
+        hw_version="1.0",
+    )
+    raw_device.entities.add(
+        id=7,
+        value=23.5,
+        type=coap_pb2.ENTITY_TYPE_SENSOR,
+        sub_type="temperature",
+        unit="°C",
+        name="Temperature",
+    )
+
+    device = CoAPDevice.from_coap_raw_new_proto(raw_device.SerializeToString())
+
+    assert device.id == "device002"
+    assert device.unique_id == "device002"
+    assert device.manufacturer == "Acme"
+    assert device.model == "Sensor Node"
+    assert device.sw_version == "2.0.0"
+    assert device.hw_version == "1.0"
+    assert len(device.sensors) == 1
+    assert device.sensors[0].id == 7
+    assert device.sensors[0].state == 23.5
+    assert device.sensors[0].name == "Temperature"
+    assert device.sensors[0].type == SensorDeviceClass.TEMPERATURE
+    assert device.sensors[0].unit == "°C"
+
+
+def test_coap_observe_request_from_proto() -> None:
+    """Test parsing an observe request's entity IDs from protobuf."""
+    raw_request = coap_pb2.ObserveDevice(
+        version=1,
+        id="device002",
+        entity_ids=[7, 9],
+    )
+
+    request = CoAPObserveRequest.from_proto(raw_request.SerializeToString())
+
+    assert request.id == "device002"
+    assert request.sensors == [7, 9]
+
+
+def test_coap_observe_response_to_proto() -> None:
+    """Test serializing observe values to the protobuf response format."""
+    response = CoAPObserveResponse(
+        id="device002",
+        sensors=[
+            CoAPObserveValue(id=7, state=23.5),
+            CoAPObserveValue(id=9, state=42),
+        ],
+    )
+
+    raw_response = coap_pb2.ObserveDeviceResponse()
+    raw_response.ParseFromString(CoAPObserveResponse.to_proto(response))
+
+    assert [(entity.id, entity.value) for entity in raw_response.entities] == [
+        (7, 23.5),
+        (9, 42.0),
+    ]

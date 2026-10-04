@@ -342,5 +342,5 @@ class CoAPObserveRequest:
         proto.ParseFromString(raw)
         return cls(
             id=proto.id,
-            sensors=[sensor.id for sensor in proto.entities]
+            sensors=list(proto.entity_ids)
         )
