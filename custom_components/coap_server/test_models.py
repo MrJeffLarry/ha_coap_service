@@ -1,4 +1,7 @@
+from enum import StrEnum
+
 import pytest
+
 from . import coap_pb2
 from .models import (
     CoAPDevice,
@@ -8,11 +11,7 @@ from .models import (
     CoAPSensor,
 )
 
-from dataclasses import dataclass, field
-from enum import StrEnum
-from typing import Any, Callable
-
-# Try importing real Home Assistant classes; fall back to safe mocks if running in isolation
+# Try importing Home Assistant classes; fall back to safe mocks in isolation.
 try:
     from homeassistant.components.binary_sensor import BinarySensorDeviceClass
     from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
@@ -144,6 +143,68 @@ def test_coap_device_from_new_proto() -> None:
     assert device.sensors[0].name == "Temperature"
     assert device.sensors[0].type == SensorDeviceClass.TEMPERATURE
     assert device.sensors[0].unit == "°C"
+
+
+@pytest.mark.parametrize(
+    ("entity_type", "sub_type", "expected_class"),
+    [
+        *[
+            (coap_pb2.ENTITY_TYPE_SENSOR, device_class.value, device_class)
+            for device_class in SensorDeviceClass
+        ],
+        *[
+            (coap_pb2.ENTITY_TYPE_BINARY_SENSOR, device_class.value, device_class)
+            for device_class in BinarySensorDeviceClass
+        ],
+        *[
+            (coap_pb2.ENTITY_TYPE_SWITCH, device_class.value, device_class)
+            for device_class in SwitchDeviceClass
+        ],
+        pytest.param(
+            coap_pb2.ENTITY_TYPE_LIGHT,
+            "brightness",
+            None,
+            id="light",
+        ),
+        pytest.param(
+            coap_pb2.ENTITY_TYPE_UNSPECIFIED,
+            "",
+            None,
+            id="unspecified",
+        ),
+    ],
+)
+def test_coap_device_from_new_proto_supports_all_entity_classes(
+    entity_type: int,
+    sub_type: str,
+    expected_class: (
+        SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | None
+    ),
+) -> None:
+    """Test parsing every supported Home Assistant class from a new-device protobuf."""
+    raw_device = coap_pb2.NewDevice(id="device003")
+    raw_device.entities.add(
+        id=1,
+        value=1,
+        type=entity_type,
+        sub_type=sub_type,
+    )
+
+    device = CoAPDevice.from_coap_raw_new_proto(raw_device.SerializeToString())
+
+    assert device.sensors[0].type == expected_class
+
+    json_entity_type = {
+        coap_pb2.ENTITY_TYPE_SENSOR: "sensor",
+        coap_pb2.ENTITY_TYPE_BINARY_SENSOR: "binary_sensor",
+        coap_pb2.ENTITY_TYPE_SWITCH: "switch",
+        coap_pb2.ENTITY_TYPE_LIGHT: "light",
+        coap_pb2.ENTITY_TYPE_UNSPECIFIED: "unspecified",
+    }[entity_type]
+    restored_sensor = CoAPSensor.from_dict(
+        {"id": 1, "value": 1, "type": json_entity_type, "sub_type": sub_type}
+    )
+    assert restored_sensor.type == expected_class
 
 
 def test_coap_observe_request_from_proto() -> None:

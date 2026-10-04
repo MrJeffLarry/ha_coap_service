@@ -6,9 +6,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 import logging
 
+from aiocoap import Context
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
