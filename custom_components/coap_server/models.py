@@ -1,4 +1,6 @@
 """Data models shared across the ha_coap_service integration."""
+from __future__ import annotations
+
 import logging
 from calendar import c
 from dataclasses import dataclass, field
@@ -79,7 +81,7 @@ class CoAPSensorConvert:
 
     @classmethod
     def convert(
-        cls, sensor_type: int, sub_type: str | None = None
+        cls, sensor_type: int | None, sub_type: str | None = None
     ) -> SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | None:
         """Convert coarse sensor type and sub-type into a native HA Device Class."""
         converters = cls._get_converters()
@@ -99,7 +101,7 @@ class CoAPSensor:
     state_class: SensorStateClass | None = None
 
     @classmethod
-    def from_coap_update_proto(cls, entity: EntityValue) -> CoAPSensor:
+    def from_coap_update_proto(cls, entity: coap_pb2.EntityValue) -> CoAPSensor:
         """Factory method to parse a CoAP protobuf sensor update payload cleanly."""
 
         return cls(
@@ -146,12 +148,18 @@ class CoAPSensor:
         """Factory method to parse a raw JSON sensor payload cleanly."""
         sensor_type_str = raw_data.get("type")
         sub_type = raw_data.get("sub_type")
+        sensor_type = {
+            "sensor": coap_pb2.ENTITY_TYPE_SENSOR,
+            "binary_sensor": coap_pb2.ENTITY_TYPE_BINARY_SENSOR,
+            "switch": coap_pb2.ENTITY_TYPE_SWITCH,
+            "light": coap_pb2.ENTITY_TYPE_LIGHT,
+        }.get(sensor_type_str)
 
         return cls(
             id=raw_data.get("id"),
             state=raw_data.get("value"),
             name=raw_data.get("name"),
-            type=CoAPSensorConvert.convert(sensor_type_str, sub_type),
+            type=CoAPSensorConvert.convert(sensor_type, sub_type),
             unit=raw_data.get("unit"),
             state_class=_safe_enum_lookup(SensorStateClass, raw_data.get("state_class")),
         )
@@ -265,7 +273,7 @@ class CoAPObserveValue:
     state: StateType
 
     @classmethod
-    def from_coap_proto(cls, entity: EntityValue) -> CoAPObserveValue:
+    def from_coap_proto(cls, entity: coap_pb2.EntityValue) -> CoAPObserveValue:
         """Factory method to parse a CoAP protobuf observe value payload cleanly."""
         return cls(
             id=entity.id,
@@ -342,5 +350,5 @@ class CoAPObserveRequest:
         proto.ParseFromString(raw)
         return cls(
             id=proto.id,
-            sensors=[sensor.id for sensor in proto.entities]
+            sensors=list(proto.entity_ids)
         )

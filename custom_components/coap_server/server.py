@@ -111,7 +111,7 @@ class WhoAmI(resource.Resource):
         self.hass = hass
         self.coordinator = coordinator
 
-    async def render_get(self, request: message.Message) -> Message:
+    async def render_get(self, request: Message) -> Message:
         """Get information about the CoAP server and the request."""
         _LOGGER.warning("Request: GET /WhoAmI")
         text = [f"Used protocol: {request.remote.scheme}."]
@@ -141,7 +141,7 @@ class WhoAmI(resource.Resource):
             content_format=ContentFormat.TEXT,
         )
 
-def uri_query(request: message.Message) -> dict[str, str] | None:
+def uri_query(request: Message) -> dict[str, str] | None:
     """Extract device_id and sensor_id from the URI query string."""
     # This function assumes you have access to the request object
     # If not, you may need to pass it as a parameter
@@ -162,7 +162,7 @@ class EndpointDevice(resource.Resource):
         self.coordinator = coordinator
 
     # New device, get information about it and all its sensors to publich to HA
-    async def render_post(self, request: message.Message):
+    async def render_post(self, request: Message):
         try:
             device = CoAPDevice.from_coap_raw_new_proto(request.payload)
         except Exception as err:
@@ -172,7 +172,7 @@ class EndpointDevice(resource.Resource):
             return Message(code=Code.CHANGED, payload=b"Device updated successfully")  # or 2.04 if you want to swallow it temporarily
         return Message(code=Code.CREATED, payload=b"Device registered successfully")
 
-    async def render_put(self, request: message.Message):
+    async def render_put(self, request: Message):
         try:
             device = CoAPDevice.from_coap_raw_update_proto(request.payload)
         except Exception as err:
