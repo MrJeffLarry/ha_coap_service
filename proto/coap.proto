@@ -8,6 +8,12 @@ enum EntityType {
   ENTITY_TYPE_LIGHT = 4;
 }
 
+enum ObserveType {
+  OBSERVE_TYPE_UNSPECIFIED = 0;
+  OBSERVE_TYPE_HEALTH_CHECK = 1;
+  OBSERVE_TYPE_UPDATE = 2;
+}
+
 message NewEntity {
   uint32 id = 1;
   double value = 2;
@@ -47,5 +53,6 @@ message ObserveDevice {
 
 message ObserveDeviceResponse {
   uint32 version = 1; /* message schema version */
-  repeated EntityValue entities = 2;
+  ObserveType type = 2;
+  repeated EntityValue entities = 3;
 }
