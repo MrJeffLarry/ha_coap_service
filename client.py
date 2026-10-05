@@ -31,20 +31,6 @@ async def send_update_request(device_id: str, port: int, address: str):
     device.entities.add(id=5, value=random.randint(0, 1))  # motion
     device.entities.add(id=6, value=random.randint(0, 1))
 
-    # 2. Define the exact payload that matches your server expectations
-    payload = {
-        "id": device_id,
-        "entities": [
-            {"id": 1, "value": random.randint(19, 25) + random.random()/10},  # temperature
-            {"id": 2, "value": random.randint(40, 50)},  # humidity
-            {"id": 3, "value": random.randint(70, 80)},  # battery
-            {"id": 4, "value": random.randint(100, 1000)},  # light
-            {"id": 5, "value": random.randint(0, 1)},  # motion
-            {"id": 6, "value": random.randint(0, 1)},  # switch
-        ],
-    }
-    payload = json.dumps(payload).encode("utf-8")
-
     payload = device.SerializeToString()
 
     # 3. Create the PUT request
@@ -105,24 +91,6 @@ async def send_new_request(device_id: str, port: int, address: str):
         type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SWITCH'),
         sub_type="switch"
     )
-
-    # 2. Define the exact payload that matches your server expectations
-    payload_json = {
-        "id": "device001",
-        "manufacturer": "Acme Corp",
-        "model": "Model PETA",
-        "fw_version": "1.0.0",
-        "hw_version": "1.0.0",
-        "entities": [
-            {"id": 1, "name": "Temperature", "unit": "°C", "type": "sensor", "sub_type": "temperature", "value": random.randint(19, 25) + random.random()/10},
-            {"id": 2, "name": "Humidity", "unit": "%", "type": "sensor", "sub_type": "humidity", "value": random.randint(40, 50)},
-            {"id": 3, "name": "Battery", "unit": "%", "type": "sensor", "sub_type": "battery", "value": random.randint(70, 80)},
-            {"id": 4, "name": "Light",  "unit": "lx", "type": "sensor", "sub_type": "illuminance", "value": random.randint(100, 200)},
-            {"id": 5, "name": "Motion",  "unit": "", "type": "binary", "sub_type": "motion", "value": random.randint(0, 1)},
-            {"id": 6, "name": "Switch",  "unit": "", "type": "switch", "sub_type": "switch", "value": random.randint(0, 1)},
-        ],
-    }
-    payload = json.dumps(payload_json).encode("utf-8")
 
     payload: bytes = device.SerializeToString()
     # 3. Create the PUT request

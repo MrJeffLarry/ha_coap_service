@@ -1,5 +1,5 @@
 {
     "name": "CoAP Server",
-    "homeassistant": "2026.6.4",
+    "homeassistant": "2026.8.1",
     "hacs": "2.0.5"
 }
