@@ -14,6 +14,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
@@ -126,30 +127,33 @@ class ExampleCoordinator(DataUpdateCoordinator):
     def _add_devices(self, new_devices: list[CoAPDevice]) -> bool:
         """Add devices to the coordinator."""
         devices = self.data.devices if self.data else []
+        all_replaced = True
         for device in new_devices:
-            found = False
-            # Update the device in the list if it exists, otherwise add it
+            replaced = False
+            # Replace an existing device entirely so stale sensors/entities don't linger
             for i, existing_device in enumerate(devices):
                 if existing_device.id == device.id:
                     _LOGGER.info(
-                        "Refreshing device data for %s %s",
+                        "Replacing device data for %s %s",
                         device.name,
                         device.unique_id,
                     )
-                    devices[i] = device
-                    found = True
+                    del devices[i]
+                    self._remove_registry_device(device.id)
+                    replaced = True
                     break
 
-            if not found:
+            if not replaced:
                 _LOGGER.info(
                     "Adding new device data for %s %s",
                     device.name,
                     device.unique_id,
                 )
-                devices.append(device)
-                async_dispatcher_send(
-                    self.hass, f"{DOMAIN}_{self.entry_id}_new_device", device
-                )
+            devices.append(device)
+            async_dispatcher_send(
+                self.hass, f"{DOMAIN}_{self.entry_id}_new_device", device
+            )
+            all_replaced = all_replaced and replaced
 
         self.async_set_updated_data(
             ExampleAPIData(
@@ -159,8 +163,16 @@ class ExampleCoordinator(DataUpdateCoordinator):
             ) # pyright: ignore[reportArgumentType]
         )
         self._async_save_devices()
-        return True
+        return all_replaced
 
+
+    def _remove_registry_device(self, device_id: str) -> None:
+        """Remove the HA device (and its entities) so it can be recreated from scratch."""
+        registry = dr.async_get(self.hass)
+        identifier = (DOMAIN, f"{self.name}-{device_id}")
+        entry = registry.async_get_device(identifiers={identifier})
+        if entry is not None:
+            registry.async_remove_device(entry.id)
 
     def _update_device(self, device: CoAPDevice) -> bool:
         """Update device in the coordinator."""
