@@ -8,6 +8,9 @@ on:
 env:
   COMPOMENT: coap_server
 
+permissions:
+  contents: write
+
 jobs:
   release:
     name: Release
