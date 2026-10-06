@@ -7,14 +7,12 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import MyConfigEntry
-from .const import DOMAIN
 from .coordinator import ExampleCoordinator
-from .entity import async_setup_entity_entry_helper
+from .entity import async_setup_entity_entry_helper, get_device_info
 from .models import CoAPDevice, CoAPSensor
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,10 +43,8 @@ class CoAPBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         super().__init__(coordinator)
         self.sensor = sensor
         self.device_id = device.id
-        self.manufacturer = device.manufacturer
-        self.model = device.model
-        self.sw_version = device.sw_version
         self.id = sensor.id
+        self._attr_device_info = get_device_info(coordinator, device)
 #        self._unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
 #        self._attr_unique_id = f"{DOMAIN}-{device.id}-{sensor.id}"
 
@@ -82,25 +78,6 @@ class CoAPBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         if self.sensor and self.sensor.type:
             return self.sensor.type.value
         return None
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information."""
-        # Identifiers are what group entities into the same device.
-        # If your device is created elsewhere, you can just specify the indentifiers parameter.
-        # If your device connects via another device, add via_device parameter with the indentifiers of that device.
-        return DeviceInfo(
-            name=f"{self.device_id}",
-            manufacturer=self.manufacturer,
-            model=self.model,
-            sw_version=self.sw_version,
-            identifiers={
-                (
-                    DOMAIN,
-                    f"{self.coordinator.data.controller_name}-{self.device_id}",
-                )
-            },
-        )
 
     @property
     def name(self) -> str:
