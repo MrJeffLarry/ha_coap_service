@@ -1,9 +1,9 @@
 name: Release workflow
 
 on:
-  release:
-    types:
-      - published
+  push:
+    tags:
+      - 'v*.*.*'
 
 env:
   COMPOMENT: coap_server
@@ -16,19 +16,26 @@ jobs:
       - name: Checkout the repository
         uses: actions/checkout@v6.0.2
 
-      - name: Get release version
-        id: version
-        uses: home-assistant/actions/helpers/version@master
-
       - name: add version to manifest.json
         run: |
-          jq --arg version "${{ steps.version.outputs.version }}" '.version = $version' ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json > temp_manifest.json
+          jq --arg version "${{ github.ref_name }}" '.version = $version' ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json > temp_manifest.json
           mv temp_manifest.json ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json
 
       - name: Create zip file for the integration
         run: |
           cd "${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}"
           zip ${{ env.COMPOMENT }}.zip -r ./
+
+      - name: Create a release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
 
       - name: Upload the zipfile as a release asset
         uses: softprops/action-gh-release@v2.5.0
