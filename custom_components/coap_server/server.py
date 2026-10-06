@@ -49,6 +49,7 @@ class CoAPServer:
         root = resource.Site()
         root.add_resource(["whoami"], WhoAmI(self.hass, self.coordinator))
         root.add_resource(["device"], EndpointDevice(self.hass, self.coordinator))
+        root.add_resource(["device", "ack"], EndpointDeviceAck(self.hass, self.coordinator))
         root.add_resource(["device", "observe"], EndpointDeviceObserveEntity(self.hass, self.coordinator))
 
         server_credentials = None
@@ -182,6 +183,30 @@ class EndpointDevice(resource.Resource):
             return Message(code=Code.CHANGED, payload=b"Device updated successfully")
 
         return Message(code=Code.NOT_FOUND, payload=b"Device not found")
+
+# Device acknowledges the values it received through observe
+class EndpointDeviceAck(resource.Resource):
+    def __init__(self, hass, coordinator):
+        super().__init__()
+        self.hass = hass
+        self.coordinator = coordinator
+
+    async def render_put(self, request: Message):
+        try:
+            device = CoAPDevice.from_coap_raw_update_proto(request.payload)
+        except Exception as err:
+            return Message(code=Code.BAD_REQUEST, payload=str(err).encode())
+
+        result = self.coordinator.ack_device_data(device)
+        if result is None:
+            return Message(code=Code.NOT_FOUND, payload=b"Device not found")
+        if result["mismatched"] or result["unknown"]:
+            return Message(code=Code.PRECONDITION_FAILED,
+                           payload=b"Ack does not match requested state")
+        return Message(code=Code.CHANGED, payload=b"Ack confirmed")
+
+    render_post = render_put
+
 
 # listen for device events from HA -> Device
 class EndpointDeviceObserveEntity(resource.ObservableResource):

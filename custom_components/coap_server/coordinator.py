@@ -285,6 +285,40 @@ class ExampleCoordinator(DataUpdateCoordinator):
         """
         return self._update_device(device)
 
+    def ack_device_data(self, device: CoAPDevice) -> dict[str, list[int]] | None:
+        """
+        Called by the CoAP API when a device acknowledges what was requested via observe.
+
+        Compares the acknowledged values with the last requested state. Returns
+        None for an unknown device, else the sensor ids that are confirmed,
+        mismatched or unknown. An event is fired for each acknowledged sensor.
+        """
+        existing = self.get_device_by_id(device.id)
+        if existing is None:
+            _LOGGER.warning("Ack for unknown device %s ignored", device.id)
+            return None
+
+        result: dict[str, list[int]] = {"confirmed": [], "mismatched": [], "unknown": []}
+        for sensor in device.sensors:
+            known = next((s for s in existing.sensors if s.id == sensor.id), None)
+            if known is None:
+                result["unknown"].append(sensor.id)
+                continue
+            confirmed = known.state == sensor.state
+            result["confirmed" if confirmed else "mismatched"].append(sensor.id)
+            self.hass.bus.async_fire(
+                f"{DOMAIN}_ack",
+                {
+                    "device_id": device.id,
+                    "sensor_id": sensor.id,
+                    "acked_value": sensor.state,
+                    "requested_value": known.state,
+                    "confirmed": confirmed,
+                },
+            )
+        _LOGGER.info("Ack from device %s: %s", device.id, result)
+        return result
+
     def update_sensor_data(self, device_id: str, sensor_id: int, state: float | int | str | bool) -> bool:
         """
         Called by switch.py to update sensor data into the coordinator.
