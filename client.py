@@ -108,6 +108,23 @@ async def send_new_request(device_id: str, port: int, address: str):
     except Exception as e:
         print(f"Failed to send request: {e}")
 
+async def send_ack_request(protocol, device_id: str, port: int, address: str, entities):
+    """Acknowledge the values received via observe back to /device/ack."""
+    ack = coap_pb2.UpdateDevice()
+    ack.id = device_id
+    for entity in entities:
+        ack.entities.add(id=entity.id, value=entity.value)
+
+    request = Message(code=PUT, payload=ack.SerializeToString())
+    request.set_request_uri(f"coap://{address}:{port}/device/ack")
+
+    try:
+        response = await protocol.request(request).response
+        print(f"Ack Response Code: {response.code}")
+        print(f"Ack Response Payload: {response.payload.decode('utf-8')}")
+    except Exception as e:
+        print(f"Failed to send ack: {e}")
+
 async def send_observe_request(device_id: str, port: int, address: str):
     # 1. Create a client context
     protocol = await Context.create_client_context()
@@ -129,6 +146,9 @@ async def send_observe_request(device_id: str, port: int, address: str):
         print(f"Response Code: {response.code}")
         print(f"Response Payload: {res}")
 
+        if res.type == coap_pb2.OBSERVE_TYPE_UPDATE:
+            await send_ack_request(protocol, device_id, port, address, res.entities)
+
         async for notification in req.observation:
             notis = coap_pb2.ObserveDeviceResponse()
             notis.ParseFromString(notification.payload)
@@ -136,6 +156,9 @@ async def send_observe_request(device_id: str, port: int, address: str):
                 print(f"{hex_bytes:02x}", end=" ")
             print("")
             print(f"Notification: {notis}")
+
+            if notis.type == coap_pb2.OBSERVE_TYPE_UPDATE:
+                await send_ack_request(protocol, device_id, port, address, notis.entities)
 
 #            req.observation.cancel()
 #            break  # Exit after receiving the first notification for demonstration purposes
