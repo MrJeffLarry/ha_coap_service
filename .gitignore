@@ -12,8 +12,10 @@ __pycache__
 coverage.xml
 .ruff_cache
 .venv
+.DS_Store
 
 
 # Home Assistant configuration
 config/*
 !config/configuration.yaml
+core
