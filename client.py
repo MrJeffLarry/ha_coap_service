@@ -132,6 +132,9 @@ async def send_observe_request(device_id: str, port: int, address: str):
         async for notification in req.observation:
             notis = coap_pb2.ObserveDeviceResponse()
             notis.ParseFromString(notification.payload)
+            for hex_bytes in notification.payload:
+                print(f"{hex_bytes:02x}", end=" ")
+            print("")
             print(f"Notification: {notis}")
 
 #            req.observation.cancel()
