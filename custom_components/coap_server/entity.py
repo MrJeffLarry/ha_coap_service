@@ -2,14 +2,36 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ExampleCoordinator
+from .models import CoAPDevice
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def get_device_info(
+    coordinator: ExampleCoordinator, device: CoAPDevice
+) -> DeviceInfo:
+    """Return the registry information for a CoAP device."""
+    return DeviceInfo(
+        identifiers={
+            (
+                DOMAIN,
+                f"{coordinator.data.controller_name}-{device.id}",
+            )
+        },
+        name=device.name or device.id or "CoAP device",
+        manufacturer=device.manufacturer,
+        model=device.model,
+        sw_version=device.sw_version,
+        hw_version=device.hw_version,
+    )
+
 
 @callback
 def async_setup_entity_entry_helper(
