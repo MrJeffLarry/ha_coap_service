@@ -223,7 +223,7 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         _LOGGER.debug("Extracted device_id: %s, sensor_id: %s", device_id, sensor_id)
 
-        if not device_id or not sensor_id:
+        if not device_id or sensor_id is None:
             _LOGGER.error("Rejected observation request: No 'id' parameter found in URI query string.")
             return
 
@@ -254,10 +254,10 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
             if obs:
                 obs.trigger(response)
 
-            self.device_observers[device_id].discard(key)
+            self.device_observers[unique_key].discard(key)
             self.observations.pop(key, None)
-            if not self.device_observers[device_id]:
-                del self.device_observers[device_id]
+            if not self.device_observers[unique_key]:
+                del self.device_observers[unique_key]
 
         # In aiocoap, accept() is enough to handle all teardown/cancellation scenarios
         server_observation.accept(on_observation_cancelled)
@@ -279,7 +279,7 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         """Triggers updates ONLY for clients registered to this device_id."""
         _LOGGER.debug("Targeted notify for device %s", device_id)
 
-        unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id else None
+        unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id is not None else None
         if not unique_key or unique_key not in self.device_observers:
              return
 
