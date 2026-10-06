@@ -74,10 +74,14 @@ class CoAPLight(CoordinatorEntity, LightEntity, RestoreEntity):
             value &= 0xFFFFFF
             self._attr_is_on = value != 0
             if value:
+                r, g, b = (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF
+                peak = max(r, g, b)
+                # HA expects rgb_color at full intensity and brightness separately
+                self._attr_brightness = peak
                 self._attr_rgb_color = (
-                    (value >> 16) & 0xFF,
-                    (value >> 8) & 0xFF,
-                    value & 0xFF,
+                    round(r * 255 / peak),
+                    round(g * 255 / peak),
+                    round(b * 255 / peak),
                 )
         elif self._light_class == LightDeviceClass.BRIGHTNESS:
             if value:
@@ -112,8 +116,17 @@ class CoAPLight(CoordinatorEntity, LightEntity, RestoreEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the light on."""
         if self._light_class == LightDeviceClass.RGB:
-            r, g, b = kwargs.get(ATTR_RGB_COLOR) or self._attr_rgb_color or (255, 255, 255)
-            value = (int(r) << 16) | (int(g) << 8) | int(b)
+            color = kwargs.get(ATTR_RGB_COLOR)
+            brightness = kwargs.get(ATTR_BRIGHTNESS)
+            if color is None:
+                color = getattr(self, "_attr_rgb_color", None) or (255, 255, 255)
+                if brightness is None:
+                    brightness = getattr(self, "_attr_brightness", None) or 255
+            if brightness is not None:
+                peak = max(color) or 1
+                color = tuple(round(c * brightness / peak) for c in color)
+            r, g, b = (max(0, min(255, int(c))) for c in color)
+            value = (r << 16) | (g << 8) | b
             if value == 0:
                 value = 0xFFFFFF
         elif self._light_class == LightDeviceClass.BRIGHTNESS:
