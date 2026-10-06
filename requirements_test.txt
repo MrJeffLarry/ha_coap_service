@@ -1,3 +1,4 @@
 pytest
 pytest-asyncio
 aiocoap
+protobuf==5.29.0
