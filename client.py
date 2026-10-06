@@ -61,31 +61,31 @@ async def send_new_request(device_id: str, port: int, address: str):
     device.model = "Model PETA"
     device.fw_version = "1.0.0"
     device.hw_version = "1.0.0"
-    device.entities.add(id=1, name="Temperature", value=random.randint(19, 25) + random.random()/10,
-        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
-        sub_type="temperature",
-        unit="°C"
-    )
-    device.entities.add(id=2, name="Humidity", value=random.randint(40, 50),
-        unit="%",
-        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
-        sub_type="humidity"
-    )
-    device.entities.add(id=3, name="Battery", value=random.randint(70, 80),
-        unit="%",
-        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
-        sub_type="battery"
-    )
-    device.entities.add(id=4, name="Light", value=random.randint(100, 200),
-        unit="lx",
-        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
-        sub_type="illuminance"
-    )
-    device.entities.add(id=5, name="Motion", value=random.randint(0, 1),
-        unit="",
-        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_BINARY'),
-        sub_type="motion"
-    )
+    # device.entities.add(id=1, name="Temperature", value=random.randint(19, 25) + random.random()/10,
+    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+    #     sub_type="temperature",
+    #     unit="°C"
+    # )
+    # device.entities.add(id=2, name="Humidity", value=random.randint(40, 50),
+    #     unit="%",
+    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+    #     sub_type="humidity"
+    # )
+    # device.entities.add(id=3, name="Battery", value=random.randint(70, 80),
+    #     unit="%",
+    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+    #     sub_type="battery"
+    # )
+    # device.entities.add(id=4, name="Light", value=random.randint(100, 200),
+    #     unit="lx",
+    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+    #     sub_type="illuminance"
+    # )
+    # device.entities.add(id=5, name="Motion", value=random.randint(0, 1),
+    #     unit="",
+    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_BINARY'),
+    #     sub_type="motion"
+    # )
     device.entities.add(id=6, name="Switch", value=random.randint(0, 1),
         unit="",
         type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SWITCH'),
