@@ -15,6 +15,28 @@ def enum_value(msg, field_name, enum_name):
         enum = field.enum_type.values_by_name.get(enum_name,None)
         return enum and enum.number
 
+async def _update_device(device_id: str, port: int, address: str, entities):
+    """Send an update request to the server with the given device ID and entities."""
+    protocol = await Context.create_client_context()
+
+    device = coap_pb2.UpdateDevice()
+    device.id = device_id
+    for entity in entities:
+        device.entities.add(id=entity.id, value=entity.value)
+
+    payload = device.SerializeToString()
+
+    request = Message(code=PUT, payload=payload)
+    request.set_request_uri(f"coap://{address}:{port}/device")
+
+    try:
+        response = await protocol.request(request).response
+        print(f"Response Code: {response.code}")
+        print(f"Response Payload: {response.payload.decode('utf-8')}")
+    except Exception as e:
+        print(f"Failed to send update request: {e}")
+
+
 # device classes aka sensor types can be found here:
 # https://developers.home-assistant.io/docs/core/entity/sensor/
 #
@@ -31,22 +53,7 @@ async def send_update_request(device_id: str, port: int, address: str):
     device.entities.add(id=5, value=random.randint(0, 1))  # motion
     device.entities.add(id=6, value=random.randint(0, 1))
 
-    payload = device.SerializeToString()
-
-    # 3. Create the PUT request
-    # NOTE: The path '/sensors/device001/data' matches your tree structure
-    request = Message(code=PUT, payload=payload)
-    request.set_request_uri(f"coap://{address}:{port}/device")
-
-    print("Sending request...")
-
-    try:
-        # 4. Send and wait for response
-        response = await protocol.request(request).response
-        print(f"Response Code: {response.code}")
-        print(f"Response Payload: {response.payload.decode('utf-8')}")
-    except Exception as e:
-        print(f"Failed to send request: {e}")
+    await _update_device(device_id, port, address, device.entities)
 
 # device classes aka sensor types can be found here:
 # https://developers.home-assistant.io/docs/core/entity/sensor/
@@ -115,7 +122,7 @@ async def send_observe_request(device_id: str, port: int, address: str):
     # 3. Create the GET request
     # NOTE: The path '/sensors/device001/data' matches your tree structure
     request = Message(code=GET, observe=0)
-    request.set_request_uri(f"coap://{address}:{port}/device/observe?id={device_id}&sensor_id=6")
+    request.set_request_uri(f"coap://{address}:{port}/device/observe?id={device_id}&sensor_id=1")
 
     print("Sending request...")
     res = coap_pb2.ObserveDeviceResponse()
@@ -136,6 +143,9 @@ async def send_observe_request(device_id: str, port: int, address: str):
                 print(f"{hex_bytes:02x}", end=" ")
             print("")
             print(f"Notification: {notis}")
+
+            if notis.type == coap_pb2.OBSERVE_TYPE_UPDATE:
+                await _update_device(device_id, port, address, notis.entities)
 
 #            req.observation.cancel()
 #            break  # Exit after receiving the first notification for demonstration purposes
