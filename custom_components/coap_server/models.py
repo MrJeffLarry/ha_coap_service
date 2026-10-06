@@ -17,6 +17,18 @@ from . import coap_pb2 as coap_pb2
 
 _LOGGER = logging.getLogger(__name__)
 
+class LightDeviceClass(StrEnum):
+    """Light capability types (Home Assistant has no light device class).
+
+    The entity value is a single number: onoff -> 0/1, brightness -> 0-255
+    (0 is off), rgb -> packed 24-bit 0xRRGGBB (0 is off).
+    """
+
+    ONOFF = "onoff"
+    BRIGHTNESS = "brightness"
+    RGB = "rgb"
+
+
 def _coerce_binary_state(value) -> bool:
     """Coerce an incoming raw sensor value into a bool for binary sensors."""
     if isinstance(value, bool):
@@ -71,7 +83,7 @@ class CoAPSensorConvert:
 
         light_val = _find_enum_value(coap_pb2.EntityType, ["LIGHT", "ENTITY_LIGHT", "ENTITY_TYPE_LIGHT"])
         if light_val is not None:
-            converters[light_val] = lambda _: None
+            converters[light_val] = lambda sub: _safe_enum_lookup(LightDeviceClass, sub) or LightDeviceClass.ONOFF
 
         unspecified_val = _find_enum_value(coap_pb2.EntityType, ["UNSPECIFIED", "ENTITY_TYPE_UNSPECIFIED", "ZERO"])
         if unspecified_val is not None:
@@ -82,7 +94,7 @@ class CoAPSensorConvert:
     @classmethod
     def convert(
         cls, sensor_type: int | None, sub_type: str | None = None
-    ) -> SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | None:
+    ) -> SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | LightDeviceClass | None:
         """Convert coarse sensor type and sub-type into a native HA Device Class."""
         converters = cls._get_converters()
         converter = converters.get(sensor_type)
@@ -96,7 +108,7 @@ class CoAPSensor:
     id: int | None
     state: StateType
     name: str | None = None
-    type: SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | None = None
+    type: SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | LightDeviceClass | None = None
     unit: str | None = None
     state_class: SensorStateClass | None = None
 
@@ -175,6 +187,8 @@ class CoAPSensor:
             sensor_type_str = "binary_sensor"
         elif isinstance(sensor.type, SwitchDeviceClass):
             sensor_type_str = "switch"
+        elif isinstance(sensor.type, LightDeviceClass):
+            sensor_type_str = "light"
 
         return {
             "id": sensor.id,
