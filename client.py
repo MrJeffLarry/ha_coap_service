@@ -68,35 +68,50 @@ async def send_new_request(device_id: str, port: int, address: str):
     device.model = "Model PETA"
     device.fw_version = "1.0.0"
     device.hw_version = "1.0.0"
-    # device.entities.add(id=1, name="Temperature", value=random.randint(19, 25) + random.random()/10,
-    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
-    #     sub_type="temperature",
-    #     unit="°C"
-    # )
-    # device.entities.add(id=2, name="Humidity", value=random.randint(40, 50),
-    #     unit="%",
-    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
-    #     sub_type="humidity"
-    # )
-    # device.entities.add(id=3, name="Battery", value=random.randint(70, 80),
-    #     unit="%",
-    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
-    #     sub_type="battery"
-    # )
-    # device.entities.add(id=4, name="Light", value=random.randint(100, 200),
-    #     unit="lx",
-    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
-    #     sub_type="illuminance"
-    # )
-    # device.entities.add(id=5, name="Motion", value=random.randint(0, 1),
-    #     unit="",
-    #     type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_BINARY'),
-    #     sub_type="motion"
-    # )
+    device.entities.add(id=1, name="Temperature", value=random.randint(19, 25) + random.random()/10,
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+        sub_type="temperature",
+        unit="°C"
+    )
+    device.entities.add(id=2, name="Humidity", value=random.randint(40, 50),
+        unit="%",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+        sub_type="humidity"
+    )
+    device.entities.add(id=3, name="Battery", value=random.randint(70, 80),
+        unit="%",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+        sub_type="battery"
+    )
+    device.entities.add(id=4, name="Light", value=random.randint(100, 200),
+        unit="lx",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SENSOR'),
+        sub_type="illuminance"
+    )
+    device.entities.add(id=5, name="Motion", value=random.randint(0, 1),
+        unit="",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_BINARY'),
+        sub_type="motion"
+    )
     device.entities.add(id=6, name="Switch", value=random.randint(0, 1),
         unit="",
         type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_SWITCH'),
         sub_type="switch"
+    )
+    device.entities.add(id=7, name="Light OnOff", value=random.randint(0, 1),
+        unit="",
+        type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_LIGHT'),
+        sub_type="onoff"
+    )
+    device.entities.add(id=8, name="Light Brightness", value=random.randint(0, 100),
+         unit="",
+         type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_LIGHT'),
+         sub_type="brightness"
+    )
+    device.entities.add(id=9, name="Light RGB", value=random.randint(0, 16777215),
+         unit="",
+         type=enum_value(coap_pb2.NewEntity, 'type', 'ENTITY_TYPE_LIGHT'),
+         sub_type="rgb"
     )
 
     payload: bytes = device.SerializeToString()
@@ -122,7 +137,7 @@ async def send_observe_request(device_id: str, port: int, address: str):
     # 3. Create the GET request
     # NOTE: The path '/sensors/device001/data' matches your tree structure
     request = Message(code=GET, observe=0)
-    request.set_request_uri(f"coap://{address}:{port}/device/observe?id={device_id}&sensor_id=1")
+    request.set_request_uri(f"coap://{address}:{port}/device/observe?id={device_id}&sensor_id=8")
 
     print("Sending request...")
     res = coap_pb2.ObserveDeviceResponse()
@@ -142,6 +157,7 @@ async def send_observe_request(device_id: str, port: int, address: str):
             for hex_bytes in notification.payload:
                 print(f"{hex_bytes:02x}", end=" ")
             print("")
+
             print(f"Notification: {notis}")
 
             if notis.type == coap_pb2.OBSERVE_TYPE_UPDATE:
