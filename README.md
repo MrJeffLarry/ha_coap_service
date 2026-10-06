@@ -47,7 +47,7 @@ numeric `id`, numeric `value`, `type`, and optional `name`, `sub_type`, and
 `hw_version`) is optional. The `type` enum values are
 `ENTITY_TYPE_SENSOR`, `ENTITY_TYPE_BINARY_SENSOR`, `ENTITY_TYPE_SWITCH`, and
 `ENTITY_TYPE_LIGHT`; `sub_type` should be a Home Assistant device-class value
-for sensor, binary sensor, or switch entities.
+for sensor, binary sensor, switch, or light entities (light sub types: `onoff`, `brightness` 0-255, `rgb` packed 0xRRGGBB value).
 
 ### Update payload
 

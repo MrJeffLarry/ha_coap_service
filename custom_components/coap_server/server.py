@@ -223,7 +223,7 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         _LOGGER.debug("Extracted device_id: %s, sensor_id: %s", device_id, sensor_id)
 
-        if not device_id or not sensor_id:
+        if not device_id or sensor_id is None:
             _LOGGER.error("Rejected observation request: No 'id' parameter found in URI query string.")
             return
 
@@ -254,10 +254,10 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
             if obs:
                 obs.trigger(response)
 
-            self.device_observers[device_id].discard(key)
+            self.device_observers[unique_key].discard(key)
             self.observations.pop(key, None)
-            if not self.device_observers[device_id]:
-                del self.device_observers[device_id]
+            if not self.device_observers[unique_key]:
+                del self.device_observers[unique_key]
 
         # In aiocoap, accept() is enough to handle all teardown/cancellation scenarios
         server_observation.accept(on_observation_cancelled)
@@ -273,13 +273,32 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         self.handle[unique_key] = asyncio.get_running_loop().call_later(
             self.keep_alive_interval,
-            self.notify, device_id, sensor_id)
+            self.notify_health, device_id, sensor_id)
+
+    def notify_health(self, device_id: str|None=None, sensor_id: int|None=None):
+        """Periodic keep-alive (OBSERVE_TYPE_HEALTH_CHECK); carries no entity values."""
+        unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id is not None else None
+        if not unique_key or unique_key not in self.device_observers:
+            return
+
+        _LOGGER.debug("Health check notify for device %s sensor %s", device_id, sensor_id)
+        self.reschedule(device_id=device_id, sensor_id=sensor_id)
+
+        response = Message(
+            code=Code.CONTENT,
+            payload=CoAPObserveResponse(id=device_id).to_proto_health(),
+            content_format=ContentFormat.OCTETSTREAM
+        )
+        for key in list(self.device_observers[unique_key]):
+            obs = self.observations.get(key)
+            if obs:
+                obs.trigger(response)
 
     def notify(self, device_id: str|None=None, sensor_id: int|None=None):
-        """Triggers updates ONLY for clients registered to this device_id."""
+        """Triggers an OBSERVE_TYPE_UPDATE carrying the changed value to clients observing this entity."""
         _LOGGER.debug("Targeted notify for device %s", device_id)
 
-        unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id else None
+        unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id is not None else None
         if not unique_key or unique_key not in self.device_observers:
              return
 
@@ -288,8 +307,6 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         sub_data = self.coordinator.get_subscribe_data(device_id, sensor_id)
         _LOGGER.debug("Subscribe data: %s", sub_data)
-
-        self.reschedule(device_id=device_id, sensor_id=sensor_id)
 
         if sub_data is None:
             _LOGGER.warning("No subscribe data found for device %s and sensor %s", device_id, sensor_id)
