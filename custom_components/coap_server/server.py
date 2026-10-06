@@ -273,10 +273,29 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         self.handle[unique_key] = asyncio.get_running_loop().call_later(
             self.keep_alive_interval,
-            self.notify, device_id, sensor_id)
+            self.notify_health, device_id, sensor_id)
+
+    def notify_health(self, device_id: str|None=None, sensor_id: int|None=None):
+        """Periodic keep-alive (OBSERVE_TYPE_HEALTH_CHECK); carries no entity values."""
+        unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id is not None else None
+        if not unique_key or unique_key not in self.device_observers:
+            return
+
+        _LOGGER.debug("Health check notify for device %s sensor %s", device_id, sensor_id)
+        self.reschedule(device_id=device_id, sensor_id=sensor_id)
+
+        response = Message(
+            code=Code.CONTENT,
+            payload=CoAPObserveResponse(id=device_id).to_proto_health(),
+            content_format=ContentFormat.OCTETSTREAM
+        )
+        for key in list(self.device_observers[unique_key]):
+            obs = self.observations.get(key)
+            if obs:
+                obs.trigger(response)
 
     def notify(self, device_id: str|None=None, sensor_id: int|None=None):
-        """Triggers updates ONLY for clients registered to this device_id."""
+        """Triggers an OBSERVE_TYPE_UPDATE carrying the changed value to clients observing this entity."""
         _LOGGER.debug("Targeted notify for device %s", device_id)
 
         unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id is not None else None
@@ -288,8 +307,6 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         sub_data = self.coordinator.get_subscribe_data(device_id, sensor_id)
         _LOGGER.debug("Subscribe data: %s", sub_data)
-
-        self.reschedule(device_id=device_id, sensor_id=sensor_id)
 
         if sub_data is None:
             _LOGGER.warning("No subscribe data found for device %s and sensor %s", device_id, sensor_id)
