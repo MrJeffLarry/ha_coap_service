@@ -1,5 +1,6 @@
 """Integration 101 Template integration using DataUpdateCoordinator."""
 
+import copy
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -192,10 +193,13 @@ class ExampleCoordinator(DataUpdateCoordinator):
                     sensor_found = False
                     for existing_sensor in existing_device.sensors:
                         if existing_sensor.id == sensor.id:
+                            changed = existing_sensor.state != sensor.state
                             existing_sensor.state = sensor.state
                             matched_sensor_ids.append(sensor.id)
                             sensor_found = True
-                            if self.data.coap_notify_callback is not None:
+                            # Only notify observers on a real change, otherwise a device
+                            # echoing the observed value back would loop forever.
+                            if changed and self.data.coap_notify_callback is not None:
                                 self.data.coap_notify_callback(device.id, sensor.id)
                             break
                     if not sensor_found:
@@ -299,13 +303,11 @@ class ExampleCoordinator(DataUpdateCoordinator):
             _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
             return False
 
-        sensor.state = state
-        for i, sensor in enumerate(device.sensors):
-            if sensor.id == sensor_id:
-                device.sensors[i].state = state
-                break
-
-        return self._update_device(device)
+        # Don't mutate the stored sensor here; _update_device compares against it
+        # to decide whether observers need a notification.
+        update = copy.copy(sensor)
+        update.state = state
+        return self._update_device(CoAPDevice(id=device.id, sensors=[update]))
 
     def get_device_by_id(self, device_id: str) -> CoAPDevice | None:
         """Return device by device id."""
