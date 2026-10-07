@@ -137,7 +137,7 @@ async def send_observe_request(device_id: str, port: int, address: str):
     # 3. Create the GET request
     # NOTE: The path '/sensors/device001/data' matches your tree structure
     request = Message(code=GET, observe=0)
-    request.set_request_uri(f"coap://{address}:{port}/device/observe?id={device_id}&sensor_id=8")
+    request.set_request_uri(f"coap://{address}:{port}/device/observe?id={device_id}&sensor_id=8&sensor_id=9")
 
     print("Sending request...")
     res = coap_pb2.ObserveDeviceResponse()

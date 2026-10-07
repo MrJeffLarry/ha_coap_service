@@ -21,10 +21,13 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     CONF_PSK_IDENTITY,
+    CONF_HEALTH_INTERVAL,
     CONF_PSK_KEY,
     CONF_USE_DTLS,
+    DEFAULT_HEALTH_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    MIN_HEALTH_INTERVAL,
     MIN_SCAN_INTERVAL,
 )
 
@@ -36,6 +39,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_USE_DTLS, default=False): bool,
         vol.Optional(CONF_PSK_IDENTITY, description={"suggested_value": ""}): str,
         vol.Optional(CONF_PSK_KEY, description={"suggested_value": ""}): str,
+        vol.Optional(CONF_HEALTH_INTERVAL, default=DEFAULT_HEALTH_INTERVAL): vol.All(
+            vol.Coerce(int), vol.Range(min=MIN_HEALTH_INTERVAL)
+        ),
     }
 )
 
@@ -155,6 +161,11 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
                     config_entry,
                     unique_id=config_entry.unique_id,
                     data=merged_input,
+                    options={
+                        k: v
+                        for k, v in config_entry.options.items()
+                        if k != CONF_HEALTH_INTERVAL
+                    },
                     reason="reconfigure_successful",
                 )
         return self.async_show_form(
@@ -173,6 +184,14 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PSK_KEY,
                         description={"suggested_value": ""},
                     ): str,
+                    vol.Optional(
+                        CONF_HEALTH_INTERVAL,
+                        default=config_entry.data.get(
+                            CONF_HEALTH_INTERVAL, DEFAULT_HEALTH_INTERVAL
+                        ),
+                    ): vol.All(
+                        vol.Coerce(int), vol.Range(min=MIN_HEALTH_INTERVAL)
+                    ),
                 }
             ),
             errors=errors,
@@ -201,6 +220,15 @@ class ExampleOptionsFlowHandler(OptionsFlow):
                     CONF_SCAN_INTERVAL,
                     default=self.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
                 ): (vol.All(vol.Coerce(int), vol.Clamp(min=MIN_SCAN_INTERVAL))),
+                vol.Required(
+                    CONF_HEALTH_INTERVAL,
+                    default=self.options.get(
+                        CONF_HEALTH_INTERVAL,
+                        self.config_entry.data.get(
+                            CONF_HEALTH_INTERVAL, DEFAULT_HEALTH_INTERVAL
+                        ),
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=MIN_HEALTH_INTERVAL)),
             }
         )
 

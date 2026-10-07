@@ -16,7 +16,15 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .coordinator import ExampleCoordinator
 from .server import CoAPServer, DTLSNotAvailable
-from .const import CONF_PSK_IDENTITY, CONF_PSK_KEY, CONF_USE_DTLS, DOMAIN, COAP_CONTEXT
+from .const import (
+    CONF_HEALTH_INTERVAL,
+    CONF_PSK_IDENTITY,
+    CONF_PSK_KEY,
+    CONF_USE_DTLS,
+    COAP_CONTEXT,
+    DEFAULT_HEALTH_INTERVAL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +44,7 @@ class RuntimeData:
 
     coordinator: DataUpdateCoordinator
     serverContext: Context | None = None
+    server: CoAPServer | None = None
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) -> bool:
@@ -63,6 +72,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) ->
         use_dtls=config_entry.data.get(CONF_USE_DTLS, False),
         psk_identity=config_entry.data.get(CONF_PSK_IDENTITY),
         psk_key=config_entry.data.get(CONF_PSK_KEY),
+        health_interval=config_entry.options.get(
+            CONF_HEALTH_INTERVAL,
+            config_entry.data.get(CONF_HEALTH_INTERVAL, DEFAULT_HEALTH_INTERVAL),
+        ),
     )
 
     # Add the coordinator and update listener to config runtime data to make
@@ -72,7 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) ->
     except DTLSNotAvailable as err:
         raise ConfigEntryNotReady(str(err)) from err
 
-    config_entry.runtime_data = RuntimeData(coordinator, coap_context)
+    config_entry.runtime_data = RuntimeData(coordinator, coap_context, server)
 
     # Setup platforms (based on the list of entity types in PLATFORMS defined above)
     # This calls the async_setup method in each of your entity type files.
@@ -126,6 +139,9 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: MyConfigEntry) -
     # bound and keeps routing device traffic to this (now stale) coordinator
     # after the config entry has been reloaded/removed and a new one takes
     # its place on the same host/port.
+    server = config_entry.runtime_data.server
+    if server:
+        server.stop_health_checks()
     coap_context = config_entry.runtime_data.serverContext
     if coap_context:
         try:

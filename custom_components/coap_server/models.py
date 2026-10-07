@@ -340,10 +340,11 @@ class CoAPObserveResponse:
             proto_response.entities.add(id=sensor.id if sensor.id is not None else 0, value=sensor.state if sensor.state is not None else "")
         return proto_response.SerializeToString()
 
-    def to_proto_health(self) -> bytes | None:
+    def to_proto_health(self, counter: int = 0) -> bytes | None:
         """Convert a CoAPObserveResponse instance to a protobuf message for health check."""
         proto_response = coap_pb2.ObserveDeviceResponse()
         proto_response.type = coap_pb2.OBSERVE_TYPE_HEALTH_CHECK
+        proto_response.counter = counter & 0xFFFFFFFF
         return proto_response.SerializeToString()
 
 @dataclass

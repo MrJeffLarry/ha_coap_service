@@ -55,4 +55,5 @@ message ObserveDeviceResponse {
   uint32 version = 1; /* message schema version */
   ObserveType type = 2;
   repeated EntityValue entities = 3;
+  uint32 counter = 4; /* health check counter */
 }
