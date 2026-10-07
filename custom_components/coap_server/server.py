@@ -108,7 +108,7 @@ class CoAPServer:
 
 
 class WhoAmI(resource.Resource):
-    def __init__(self, hass, coordinator, keep_alive_interval: int = 10):
+    def __init__(self, hass, coordinator):
         super().__init__()
         self.hass = hass
         self.coordinator = coordinator
@@ -187,7 +187,7 @@ class EndpointDevice(resource.Resource):
 
 # listen for device events from HA -> Device
 class EndpointDeviceObserveEntity(resource.ObservableResource):
-    def __init__(self, hass, coordinator):
+    def __init__(self, hass, coordinator, keep_alive_interval: int = 10):
         super().__init__()
         self.hass = hass
         self.coordinator = coordinator
