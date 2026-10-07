@@ -16,7 +16,15 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .coordinator import ExampleCoordinator
 from .server import CoAPServer, DTLSNotAvailable
-from .const import CONF_PSK_IDENTITY, CONF_PSK_KEY, CONF_USE_DTLS, DOMAIN, COAP_CONTEXT
+from .const import (
+    CONF_HEALTH_INTERVAL,
+    CONF_PSK_IDENTITY,
+    CONF_PSK_KEY,
+    CONF_USE_DTLS,
+    COAP_CONTEXT,
+    DEFAULT_HEALTH_INTERVAL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,6 +71,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: MyConfigEntry) ->
         use_dtls=config_entry.data.get(CONF_USE_DTLS, False),
         psk_identity=config_entry.data.get(CONF_PSK_IDENTITY),
         psk_key=config_entry.data.get(CONF_PSK_KEY),
+        health_interval=config_entry.data.get(
+            CONF_HEALTH_INTERVAL, DEFAULT_HEALTH_INTERVAL
+        ),
     )
 
     # Add the coordinator and update listener to config runtime data to make

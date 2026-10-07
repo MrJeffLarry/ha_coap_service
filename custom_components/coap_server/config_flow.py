@@ -21,10 +21,13 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     CONF_PSK_IDENTITY,
+    CONF_HEALTH_INTERVAL,
     CONF_PSK_KEY,
     CONF_USE_DTLS,
+    DEFAULT_HEALTH_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    MIN_HEALTH_INTERVAL,
     MIN_SCAN_INTERVAL,
 )
 
@@ -36,6 +39,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_USE_DTLS, default=False): bool,
         vol.Optional(CONF_PSK_IDENTITY, description={"suggested_value": ""}): str,
         vol.Optional(CONF_PSK_KEY, description={"suggested_value": ""}): str,
+        vol.Optional(CONF_HEALTH_INTERVAL, default=DEFAULT_HEALTH_INTERVAL): vol.All(
+            vol.Coerce(int), vol.Range(min=MIN_HEALTH_INTERVAL)
+        ),
     }
 )
 
@@ -173,6 +179,14 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PSK_KEY,
                         description={"suggested_value": ""},
                     ): str,
+                    vol.Optional(
+                        CONF_HEALTH_INTERVAL,
+                        default=config_entry.data.get(
+                            CONF_HEALTH_INTERVAL, DEFAULT_HEALTH_INTERVAL
+                        ),
+                    ): vol.All(
+                        vol.Coerce(int), vol.Range(min=MIN_HEALTH_INTERVAL)
+                    ),
                 }
             ),
             errors=errors,

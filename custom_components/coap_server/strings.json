@@ -20,14 +20,16 @@
           "port": "Port",
           "use_dtls": "Use DTLS (CoAPS)",
           "psk_identity": "PSK identity",
-          "psk_key": "PSK key"
+          "psk_key": "PSK key",
+          "health_check_interval": "Observe health check interval (seconds)"
         }
       },
       "reconfigure": {
         "data": {
           "use_dtls": "Use DTLS (CoAPS)",
           "psk_identity": "PSK identity",
-          "psk_key": "PSK key"
+          "psk_key": "PSK key",
+          "health_check_interval": "Observe health check interval (seconds)"
         }
       }
     }

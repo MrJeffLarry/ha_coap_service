@@ -30,7 +30,8 @@ class CoAPServer:
         coordinator,
         use_dtls: bool = False,
         psk_identity: str | None = None,
-        psk_key: str | None = None) -> None:
+        psk_key: str | None = None,
+        health_interval: int = 10) -> None:
         """Initialise services."""
         self.hass = hass
         self.port = port
@@ -38,6 +39,7 @@ class CoAPServer:
         self.use_dtls = use_dtls
         self.psk_identity = psk_identity
         self.psk_key = psk_key
+        self.health_interval = health_interval
 
     async def setup_services(self) -> Context:
         """Setup CoAP server and register services."""
@@ -49,7 +51,7 @@ class CoAPServer:
         root = resource.Site()
         root.add_resource(["whoami"], WhoAmI(self.hass, self.coordinator))
         root.add_resource(["device"], EndpointDevice(self.hass, self.coordinator))
-        root.add_resource(["device", "observe"], EndpointDeviceObserveEntity(self.hass, self.coordinator))
+        root.add_resource(["device", "observe"], EndpointDeviceObserveEntity(self.hass, self.coordinator, self.health_interval))
 
         server_credentials = None
         transports = None
@@ -106,7 +108,7 @@ class CoAPServer:
 
 
 class WhoAmI(resource.Resource):
-    def __init__(self, hass, coordinator):
+    def __init__(self, hass, coordinator, keep_alive_interval: int = 10):
         super().__init__()
         self.hass = hass
         self.coordinator = coordinator
@@ -194,7 +196,9 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         # Maps observation key -> actual aiocoap ServerObservation object
         self.observations = {}
         self.handle: dict[str, asyncio.TimerHandle] = {}
-        self.keep_alive_interval = 10  # seconds
+        self.keep_alive_interval = keep_alive_interval  # seconds
+        # Maps unique_key -> number of health checks sent
+        self.health_counters: dict[str, int] = {}
 
         # Register the callback with the coordinator on init
         # This assumes your coordinator can call: callback(device_id)
@@ -258,6 +262,7 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
             self.observations.pop(key, None)
             if not self.device_observers[unique_key]:
                 del self.device_observers[unique_key]
+                self.health_counters.pop(unique_key, None)
 
         # In aiocoap, accept() is enough to handle all teardown/cancellation scenarios
         server_observation.accept(on_observation_cancelled)
@@ -284,9 +289,12 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         _LOGGER.debug("Health check notify for device %s sensor %s", device_id, sensor_id)
         self.reschedule(device_id=device_id, sensor_id=sensor_id)
 
+        counter = self.health_counters.get(unique_key, 0) + 1
+        self.health_counters[unique_key] = counter
+
         response = Message(
             code=Code.CONTENT,
-            payload=CoAPObserveResponse(id=device_id).to_proto_health(),
+            payload=CoAPObserveResponse(id=device_id).to_proto_health(counter),
             content_format=ContentFormat.OCTETSTREAM
         )
         for key in list(self.device_observers[unique_key]):
