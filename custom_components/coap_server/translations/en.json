@@ -38,7 +38,8 @@
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Scan Interval (seconds)"
+          "scan_interval": "Scan Interval (seconds)",
+          "health_check_interval": "Observe health check interval (seconds)"
         },
         "description": "Amend your options.",
         "title": "Example Integration Options"

@@ -40,6 +40,7 @@ class CoAPServer:
         self.psk_identity = psk_identity
         self.psk_key = psk_key
         self.health_interval = health_interval
+        self.observe_resource: EndpointDeviceObserveEntity | None = None
 
     async def setup_services(self) -> Context:
         """Setup CoAP server and register services."""
@@ -51,7 +52,8 @@ class CoAPServer:
         root = resource.Site()
         root.add_resource(["whoami"], WhoAmI(self.hass, self.coordinator))
         root.add_resource(["device"], EndpointDevice(self.hass, self.coordinator))
-        root.add_resource(["device", "observe"], EndpointDeviceObserveEntity(self.hass, self.coordinator, self.health_interval))
+        self.observe_resource = EndpointDeviceObserveEntity(self.hass, self.coordinator, self.health_interval)
+        root.add_resource(["device", "observe"], self.observe_resource)
 
         server_credentials = None
         transports = None
@@ -95,6 +97,11 @@ class CoAPServer:
             server_credentials=server_credentials,
             transports=transports,
         )  # 5683 (or 5684 for coaps://)
+
+    def stop_health_checks(self) -> None:
+        """Stop the observe resource's timers (called on unload/reload)."""
+        if self.observe_resource:
+            self.observe_resource.stop_health_checks()
 
     @staticmethod
     def _preload_dependencies() -> None:
@@ -204,6 +211,15 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         # This assumes your coordinator can call: callback(device_id)
         if hasattr(self.coordinator, "async_add_notifyer"):
             self._unregister_callback = self.coordinator.async_add_notifyer(self.notify)
+
+    def stop_health_checks(self):
+        """Cancel pending health-check timers so a stale resource stops notifying."""
+        for handle in self.handle.values():
+            handle.cancel()
+        self.handle.clear()
+        self.device_observers.clear()
+        self.observations.clear()
+        self.health_counters.clear()
 
     async def add_observation(self, request, server_observation):
         """Called automatically by aiocoap when a client requests observation."""

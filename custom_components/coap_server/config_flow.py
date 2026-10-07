@@ -161,6 +161,11 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
                     config_entry,
                     unique_id=config_entry.unique_id,
                     data=merged_input,
+                    options={
+                        k: v
+                        for k, v in config_entry.options.items()
+                        if k != CONF_HEALTH_INTERVAL
+                    },
                     reason="reconfigure_successful",
                 )
         return self.async_show_form(
@@ -215,6 +220,15 @@ class ExampleOptionsFlowHandler(OptionsFlow):
                     CONF_SCAN_INTERVAL,
                     default=self.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
                 ): (vol.All(vol.Coerce(int), vol.Clamp(min=MIN_SCAN_INTERVAL))),
+                vol.Required(
+                    CONF_HEALTH_INTERVAL,
+                    default=self.options.get(
+                        CONF_HEALTH_INTERVAL,
+                        self.config_entry.data.get(
+                            CONF_HEALTH_INTERVAL, DEFAULT_HEALTH_INTERVAL
+                        ),
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=MIN_HEALTH_INTERVAL)),
             }
         )
 
