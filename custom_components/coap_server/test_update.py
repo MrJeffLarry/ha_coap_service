@@ -1,3 +1,7 @@
+"""Tests for the CoAP firmware update platform."""
+
+# ruff: noqa: S101
+
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -8,7 +12,7 @@ from .models import CoAPDevice
 
 @pytest.mark.asyncio
 async def test_update_entities_are_created_only_for_devices_with_firmware_urls(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test initial and dynamic firmware update entity creation."""
     coordinator = MagicMock()

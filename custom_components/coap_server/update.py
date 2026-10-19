@@ -1,16 +1,23 @@
 """Firmware update entities for CoAP devices."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from homeassistant.components.update import UpdateEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import MyConfigEntry
 from .const import DOMAIN
-from .coordinator import ExampleCoordinator
 from .entity import get_device_info
-from .models import CoAPDevice
+
+if TYPE_CHECKING:
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from . import MyConfigEntry
+    from .coordinator import ExampleCoordinator
+    from .models import CoAPDevice
 
 
 async def async_setup_entry(
