@@ -111,6 +111,7 @@ class CoAPSensor:
     type: SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | LightDeviceClass | None = None
     unit: str | None = None
     state_class: SensorStateClass | None = None
+    entity_category: str | None = None
 
     @classmethod
     def from_coap_update_proto(cls, entity: coap_pb2.EntityValue) -> CoAPSensor:
@@ -211,6 +212,9 @@ class CoAPDevice:
     manufacturer: str | None = None
     sw_version: str | None = None
     hw_version: str | None = None
+    latest_sw_version: str | None = "1.1.0"
+    update_in_progress: bool = False
+    update_progress: int | None = 0
     firmware_url: str | None = None
     sensors: list[CoAPSensor] = field(default_factory=list)
 

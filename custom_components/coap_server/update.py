@@ -1,16 +1,23 @@
 """Firmware update entities for CoAP devices."""
 
 from __future__ import annotations
-
+import logging
 from typing import TYPE_CHECKING
 
-from homeassistant.components.update import UpdateEntity
+from homeassistant.components.update import (
+    UpdateDeviceClass,
+    UpdateEntity,
+    UpdateEntityFeature,
+)
+
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .entity import get_device_info
+
+_LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -49,17 +56,67 @@ class CoAPFirmwareUpdate(CoordinatorEntity, UpdateEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Firmware"
+    _attr_device_class = UpdateDeviceClass.FIRMWARE
+    _attr_supported_features = (
+        UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
+    )
 
     def __init__(self, coordinator: ExampleCoordinator, device: CoAPDevice) -> None:
         """Initialize the firmware update entity."""
         super().__init__(coordinator)
+        self.device = device
         self._firmware_url = device.firmware_url
         self._attr_unique_id = f"{device.id}_firmware_update"
         self._attr_device_info = get_device_info(coordinator, device)
         self._attr_installed_version = device.sw_version
-        self._attr_release_url = device.firmware_url
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Update the sensor with the latest data from the coordinator."""
+        device = self.coordinator.get_device_by_id(self.device_id)
+        if device is None:
+            _LOGGER.debug(
+                "No coordinator data for device %s sensor %s; keeping last known state",
+                self.device_id,
+                self.id,
+            )
+            return
+        self.device = device
+        self.async_write_ha_state()
+
+    # @property
+    # def has_update(self) -> bool:
+    #     """Return whether the device registered an available firmware image."""
+    #     return True #self.device.sw_version != self.device.latest_sw_version
 
     @property
-    def has_update(self) -> bool:
-        """Return whether the device registered an available firmware image."""
-        return bool(self._firmware_url)
+    def installed_version(self) -> str | None:
+        """Return the installed firmware version."""
+        return self.device.sw_version
+
+    @property
+    def latest_version(self) -> str | None:
+        """Return the newest firmware version."""
+        return self.device.latest_sw_version
+
+    @property
+    def in_progress(self) -> bool:
+        """Return whether the firmware is being installed."""
+        return self.device.update_in_progress
+
+    @property
+    def update_percentage(self) -> int | None:
+        """Return the install progress."""
+        return self.device.update_progress
+
+    async def async_install(
+        self, version: str | None, backup: bool, **kwargs: Any
+    ) -> None:
+        """Install an update."""
+        if not self.device.firmware_url:
+            _LOGGER.error(
+                "Device %s does not have a firmware URL; cannot install update",
+                self.device_id,
+            )
+            return
+        await self.coordinator.install_firmware(self.device, self.device.firmware_url)
