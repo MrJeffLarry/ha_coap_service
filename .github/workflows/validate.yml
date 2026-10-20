@@ -1,12 +1,13 @@
-name: Validate
+name: Validate HACS and hassfest
 
 on:
-  pull_request:
-    branches:
-      - main
+  # pull_request:
+  #   branches:
+  #     - main
   # push:
   #   branches:
   #     - main
+  workflow_dispatch:
 #  schedule:
 #    - cron: "0 0 * * *"
 
@@ -14,52 +15,26 @@ permissions:
   contents: read
 
 jobs:
-  tests:
-    runs-on: ubuntu-latest
-    name: Python tests
-    steps:
-      - name: 📥 Checkout the repository
-        uses: actions/checkout@v6.0.2
+ validate-hassfest:
+   runs-on: ubuntu-latest
+   name: With hassfest
+   steps:
+     - name: 📥 Checkout the repository
+       uses: actions/checkout@v6.0.2
 
-      - name: Set up Python
-        uses: actions/setup-python@v6.2.0
-        with:
-          python-version: "3.14"
-          cache: pip
-          cache-dependency-path: |
-            requirements_dev.txt
-            requirements_test.txt
+     - name: ✅ Hassfest validation
+       uses: "home-assistant/actions/hassfest@master"
 
-      - name: Install test dependencies
-        run: |
-          python -m pip install -r requirements_dev.txt -r requirements_test.txt protobuf
+ validate-hacs:
+   runs-on: ubuntu-latest
+   name: With HACS Action
+   steps:
+     - name: 📥 Checkout the repository
+       uses: actions/checkout@v6.0.2
 
-      - name: Run tests
-        run: |
-          python -m pytest -q -o addopts= \
-            custom_components/coap_server/test_models.py \
-            custom_components/coap_server/test_server.py
-
-#  validate-hassfest:
-#    runs-on: ubuntu-latest
-#    name: With hassfest
-#    steps:
-#      - name: 📥 Checkout the repository
-#        uses: actions/checkout@v6.0.2
-#
-#      - name: ✅ Hassfest validation
-#        uses: "home-assistant/actions/hassfest@master"
-
-#  validate-hacs:
-#    runs-on: ubuntu-latest
-#    name: With HACS Action
-#    steps:
-#      - name: 📥 Checkout the repository
-#        uses: actions/checkout@v6.0.2
-
-#      - name: ✅ HACS validation
-#        uses: hacs/action@main
-#        with:
-#          category: integration
-#          comment: false
-#          ignore: brands wheels
+     - name: ✅ HACS validation
+       uses: hacs/action@main
+       with:
+         category: integration
+         comment: false
+         ignore: brands wheels

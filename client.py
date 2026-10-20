@@ -143,6 +143,15 @@ async def send_new_request(device_id: str, port: int, address: str):
         type=enum_value(coap_pb2.NewEntity, "type", "ENTITY_TYPE_LIGHT"),
         sub_type="rgb",
     )
+    device.entities.add(
+        id=10,
+        name="Battery Voltage",
+        value=random.randint(0, 4200),
+        unit="mV",
+        type=enum_value(coap_pb2.NewEntity, "type", "ENTITY_TYPE_SENSOR"),
+        sub_type="voltage",
+    )
+
 
     payload: bytes = device.SerializeToString()
     # 3. Create the PUT request

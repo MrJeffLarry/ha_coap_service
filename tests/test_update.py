@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from . import update
-from .models import CoAPDevice
+from custom_components.coap_server import update
+from custom_components.coap_server.models import CoAPDevice
 
 
 @pytest.mark.asyncio

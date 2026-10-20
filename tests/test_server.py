@@ -4,9 +4,9 @@ import pytest
 from aiocoap import Message
 from aiocoap.numbers.codes import Code
 
-from . import coap_pb2
-from .models import CoAPDevice, CoAPObserveResponse, CoAPObserveValue
-from .server import EndpointDevice, EndpointDeviceObserveEntity
+from custom_components.coap_server import coap_pb2
+from custom_components.coap_server.models import CoAPDevice, CoAPObserveResponse, CoAPObserveValue
+from custom_components.coap_server.server import EndpointDevice, EndpointDeviceObserveEntity
 
 
 @pytest.mark.asyncio

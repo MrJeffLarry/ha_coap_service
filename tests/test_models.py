@@ -2,8 +2,8 @@ from enum import StrEnum
 
 import pytest
 
-from . import coap_pb2
-from .models import (
+from custom_components.coap_server import coap_pb2
+from custom_components.coap_server.models import (
     CoAPDevice,
     LightDeviceClass,
     CoAPObserveRequest,

@@ -1,0 +1,35 @@
+name: Release workflow
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  COMPOMENT: coap_server
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6.0.2
+
+      - name: add version to manifest.json
+        run: |
+          jq --arg version "${{ github.ref_name }}" '.version = $version' ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json > temp_manifest.json
+          mv temp_manifest.json ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json
+
+      - name: Create zip file for the integration
+        run: |
+          cd "${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}"
+          zip ${{ env.COMPOMENT }}.zip -r ./
+
+      - name: Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/${{ env.COMPOMENT }}.zip
