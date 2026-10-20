@@ -36,7 +36,7 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest -q \
+          python -m pytest -q -o addopts= \
             custom_components/coap_server/test_models.py \
             custom_components/coap_server/test_server.py
 

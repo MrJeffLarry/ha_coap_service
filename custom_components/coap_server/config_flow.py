@@ -189,9 +189,7 @@ class ExampleConfigFlow(ConfigFlow, domain=DOMAIN):
                         default=config_entry.data.get(
                             CONF_HEALTH_INTERVAL, DEFAULT_HEALTH_INTERVAL
                         ),
-                    ): vol.All(
-                        vol.Coerce(int), vol.Range(min=MIN_HEALTH_INTERVAL)
-                    ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=MIN_HEALTH_INTERVAL)),
                 }
             ),
             errors=errors,
@@ -238,17 +236,22 @@ class ExampleOptionsFlowHandler(OptionsFlow):
 class CannotConnect(HomeAssistantError):
     """Error to indicate we cannot connect."""
 
+
 class InvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""
+
 
 class AlreadyConfigured(HomeAssistantError):
     """Error to indicate the device is already configured."""
 
+
 class PortOutOfRange(HomeAssistantError):
     """Error to indicate the port is out of range."""
 
+
 class PSKRequired(HomeAssistantError):
     """Error to indicate a PSK identity/key is required when DTLS is enabled."""
+
 
 class DTLSNotAvailable(HomeAssistantError):
     """Error to indicate the DTLSSocket package is not installed/available."""

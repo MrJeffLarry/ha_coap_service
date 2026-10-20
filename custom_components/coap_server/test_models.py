@@ -18,6 +18,7 @@ try:
     from homeassistant.components.switch import SwitchDeviceClass
     from homeassistant.helpers.typing import StateType
 except ImportError:
+
     class SensorDeviceClass(StrEnum):
         TEMPERATURE = "temperature"
         HUMIDITY = "humidity"
@@ -40,6 +41,7 @@ except ImportError:
         TOTAL_INCREASING = "total_increasing"
 
     type StateType = str | int | float | bool | None
+
 
 def test_coap_sensor_from_and_to_dict() -> None:
     """Test serializing and deserializing a CoAPSensor."""

@@ -73,9 +73,7 @@ async def test_device_registration_and_observe_endpoints() -> None:
     observe = EndpointDeviceObserveEntity(None, coordinator)
     observe.reschedule = Mock()
     request = Message(code=Code.GET)
-    request.set_request_uri(
-        "coap://localhost/device/observe?id=device004&sensor_id=1"
-    )
+    request.set_request_uri("coap://localhost/device/observe?id=device004&sensor_id=1")
 
     observe_response = await observe.render_get(request)
 

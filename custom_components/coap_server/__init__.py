@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 import logging
 
@@ -21,7 +20,7 @@ from .const import (
     CONF_PSK_IDENTITY,
     CONF_PSK_KEY,
     CONF_USE_DTLS,
-    COAP_CONTEXT,
+    COAP_CONTEXT as COAP_CONTEXT,
     DEFAULT_HEALTH_INTERVAL,
     DOMAIN,
 )
@@ -132,7 +131,9 @@ async def async_remove_config_entry_device(
 async def async_unload_entry(hass: HomeAssistant, config_entry: MyConfigEntry) -> bool:
     """Unload a config entry."""
     # 1. Forward the unload to the sensor platform
-    unload_ok = await hass.config_entries.async_unload_platforms(config_entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        config_entry, PLATFORMS
+    )
 
     # 2. Shutdown the CoAP context. This must always run, even if platform
     # unload fails, otherwise the old aiocoap server keeps the UDP socket
