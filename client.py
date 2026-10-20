@@ -70,6 +70,7 @@ async def send_new_request(device_id: str, port: int, address: str):
     device.model = "Model PETA"
     device.fw_version = "1.0.0"
     device.hw_version = "1.0.0"
+    device.firmware_url = "https://example.com/firmware.bin"
     device.entities.add(
         id=1,
         name="Temperature",

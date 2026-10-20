@@ -145,6 +145,7 @@ class CoAPSensor:
     ) = None
     unit: str | None = None
     state_class: SensorStateClass | None = None
+    entity_category: str | None = None
 
     @classmethod
     def from_coap_update_proto(cls, entity: coap_pb2.EntityValue) -> CoAPSensor:
@@ -248,6 +249,10 @@ class CoAPDevice:
     manufacturer: str | None = None
     sw_version: str | None = None
     hw_version: str | None = None
+    latest_sw_version: str | None = "1.1.0"
+    update_in_progress: bool = False
+    update_progress: int | None = 0
+    firmware_url: str | None = None
     sensors: list[CoAPSensor] = field(default_factory=list)
 
     @classmethod
@@ -288,6 +293,7 @@ class CoAPDevice:
             manufacturer=proto_device.manufacturer,
             sw_version=proto_device.fw_version,
             hw_version=proto_device.hw_version,
+            firmware_url=proto_device.firmware_url or None,
             sensors=[
                 CoAPSensor.from_coap_proto(entity) for entity in proto_device.entities
             ],
@@ -304,6 +310,7 @@ class CoAPDevice:
             manufacturer=raw_data.get("manufacturer"),
             sw_version=raw_data.get("sw_version"),
             hw_version=raw_data.get("hw_version"),
+            firmware_url=raw_data.get("firmware_url"),
             sensors=[
                 CoAPSensor.from_dict(sensor) for sensor in raw_data.get("sensors", [])
             ],
@@ -320,6 +327,7 @@ class CoAPDevice:
             "manufacturer": device.manufacturer,
             "sw_version": device.sw_version,
             "hw_version": device.hw_version,
+            "firmware_url": device.firmware_url,
             "sensors": [CoAPSensor.to_dict(sensor) for sensor in device.sensors],
         }
 

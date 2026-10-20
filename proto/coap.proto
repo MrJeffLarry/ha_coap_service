@@ -32,6 +32,7 @@ message NewDevice {
   optional string model = 5;
   optional string fw_version = 6;
   optional string hw_version = 7;
+  optional string firmware_url = 8;
 }
 
 message EntityValue {

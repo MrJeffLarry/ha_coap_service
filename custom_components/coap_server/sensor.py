@@ -1,6 +1,6 @@
 import logging
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
@@ -43,6 +43,7 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
         self._attr_device_class = sensor.type.value
         self._attr_unique_id = f"{self.device_id}_{self.id}"
         self._attr_device_info = get_device_info(coordinator, device)
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC if self.sensor.type.value == SensorDeviceClass.BATTERY else None
 
     @callback
     def _handle_coordinator_update(self) -> None:

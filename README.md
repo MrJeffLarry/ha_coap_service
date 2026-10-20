@@ -44,7 +44,8 @@ The authoritative message definitions are in
 POST a serialized `NewDevice` message. Set its `id`, and include each entity's
 numeric `id`, numeric `value`, `type`, and optional `name`, `sub_type`, and
 `unit`. Device metadata (`manufacturer`, `model`, `fw_version`, and
-`hw_version`) is optional. The `type` enum values are
+`hw_version`) is optional. Add the optional `firmware_url` to expose a firmware
+update entity linked to that URL in Home Assistant. The `type` enum values are
 `ENTITY_TYPE_SENSOR`, `ENTITY_TYPE_BINARY_SENSOR`, `ENTITY_TYPE_SWITCH`, and
 `ENTITY_TYPE_LIGHT`; `sub_type` should be a Home Assistant device-class value
 for sensor, binary sensor, switch, or light entities (light sub types: `onoff`, `brightness` 0-255, `rgb` packed 0xRRGGBB value).

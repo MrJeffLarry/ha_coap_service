@@ -122,6 +122,7 @@ def test_coap_device_from_new_proto() -> None:
         model="Sensor Node",
         fw_version="2.0.0",
         hw_version="1.0",
+        firmware_url="https://example.com/firmware.bin",
     )
     raw_device.entities.add(
         id=7,
@@ -140,12 +141,27 @@ def test_coap_device_from_new_proto() -> None:
     assert device.model == "Sensor Node"
     assert device.sw_version == "2.0.0"
     assert device.hw_version == "1.0"
+    assert device.firmware_url == "https://example.com/firmware.bin"
     assert len(device.sensors) == 1
     assert device.sensors[0].id == 7
     assert device.sensors[0].state == 23.5
     assert device.sensors[0].name == "Temperature"
     assert device.sensors[0].type == SensorDeviceClass.TEMPERATURE
     assert device.sensors[0].unit == "°C"
+
+
+def test_coap_device_dict_round_trip_preserves_firmware_url() -> None:
+    """Test persisting a registered firmware URL."""
+    device = CoAPDevice.from_dict(
+        {
+            "id": "device004",
+            "firmware_url": "https://example.com/firmware.bin",
+        }
+    )
+
+    assert CoAPDevice.to_dict(device)["firmware_url"] == (
+        "https://example.com/firmware.bin"
+    )
 
 
 @pytest.mark.parametrize(
