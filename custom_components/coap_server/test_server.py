@@ -68,7 +68,7 @@ async def test_device_registration_and_observe_endpoints() -> None:
     assert [
         sensor.type.value if sensor.type else None
         for sensor in registered_device.sensors
-    ] == ["temperature", "motion", "switch", None]
+    ] == ["temperature", "motion", "switch", "brightness"]
 
     observe = EndpointDeviceObserveEntity(None, coordinator)
     observe.reschedule = Mock()

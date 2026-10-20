@@ -5,6 +5,7 @@ import pytest
 from . import coap_pb2
 from .models import (
     CoAPDevice,
+    LightDeviceClass,
     CoAPObserveRequest,
     CoAPObserveResponse,
     CoAPObserveValue,
@@ -165,7 +166,7 @@ def test_coap_device_from_new_proto() -> None:
         pytest.param(
             coap_pb2.ENTITY_TYPE_LIGHT,
             "brightness",
-            None,
+            LightDeviceClass.BRIGHTNESS,
             id="light",
         ),
         pytest.param(
@@ -180,7 +181,11 @@ def test_coap_device_from_new_proto_supports_all_entity_classes(
     entity_type: int,
     sub_type: str,
     expected_class: (
-        SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | None
+        SensorDeviceClass
+        | BinarySensorDeviceClass
+        | SwitchDeviceClass
+        | LightDeviceClass
+        | None
     ),
 ) -> None:
     """Test parsing every supported Home Assistant class from a new-device protobuf."""
