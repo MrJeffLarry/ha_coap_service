@@ -5,6 +5,7 @@ import pytest
 from . import coap_pb2
 from .models import (
     CoAPDevice,
+    LightDeviceClass,
     CoAPObserveRequest,
     CoAPObserveResponse,
     CoAPObserveValue,
@@ -18,6 +19,7 @@ try:
     from homeassistant.components.switch import SwitchDeviceClass
     from homeassistant.helpers.typing import StateType
 except ImportError:
+
     class SensorDeviceClass(StrEnum):
         TEMPERATURE = "temperature"
         HUMIDITY = "humidity"
@@ -40,6 +42,7 @@ except ImportError:
         TOTAL_INCREASING = "total_increasing"
 
     type StateType = str | int | float | bool | None
+
 
 def test_coap_sensor_from_and_to_dict() -> None:
     """Test serializing and deserializing a CoAPSensor."""
@@ -163,7 +166,7 @@ def test_coap_device_from_new_proto() -> None:
         pytest.param(
             coap_pb2.ENTITY_TYPE_LIGHT,
             "brightness",
-            None,
+            LightDeviceClass.BRIGHTNESS,
             id="light",
         ),
         pytest.param(
@@ -178,7 +181,11 @@ def test_coap_device_from_new_proto_supports_all_entity_classes(
     entity_type: int,
     sub_type: str,
     expected_class: (
-        SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | None
+        SensorDeviceClass
+        | BinarySensorDeviceClass
+        | SwitchDeviceClass
+        | LightDeviceClass
+        | None
     ),
 ) -> None:
     """Test parsing every supported Home Assistant class from a new-device protobuf."""

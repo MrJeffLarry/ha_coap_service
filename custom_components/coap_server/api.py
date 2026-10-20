@@ -4,18 +4,17 @@ You should create your api seperately and have it hosted on PYPI.  This is inclu
 of making this example code executable.
 """
 
-from dataclasses import dataclass
-from enum import StrEnum
 from random import choice, randrange
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.sensor import SensorDeviceClass
 import logging
 
-from .models import CoAPDevice, CoAPSensor, CoAPDeviceType
+from .models import CoAPDevice, CoAPDeviceType
 
 _LOGGER = logging.getLogger(__name__)
 
 DEVICES: list[CoAPDevice] = []
+
 
 class API:
     """Class for example API."""
@@ -71,7 +70,9 @@ class API:
             return f"TempSensor{device_id}"
         return f"OtherSensor{device_id}"
 
-    def get_device_value(self, device_id: str, device_type: CoAPDeviceType) -> int | bool:
+    def get_device_value(
+        self, device_id: str, device_type: CoAPDeviceType
+    ) -> int | bool:
         """Get device random value."""
         if device_type == CoAPDeviceType.DOOR_SENSOR:
             return choice([True, False])
