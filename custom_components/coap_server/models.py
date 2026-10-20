@@ -1,8 +1,8 @@
 """Data models shared across the ha_coap_service integration."""
+
 from __future__ import annotations
 
 import logging
-from calendar import c
 from dataclasses import dataclass, field
 from typing import Callable, Any
 from enum import StrEnum
@@ -11,11 +11,11 @@ from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.helpers.typing import StateType
 from homeassistant.components.switch import SwitchDeviceClass
-from homeassistant.helpers.typing import StateType
 
 from . import coap_pb2 as coap_pb2
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class LightDeviceClass(StrEnum):
     """Light capability types (Home Assistant has no light device class).
@@ -39,6 +39,7 @@ def _coerce_binary_state(value) -> bool:
         return value.strip().lower() in ("1", "true", "on", "open", "yes", "detected")
     return bool(value)
 
+
 def _safe_enum_lookup(enum_cls: type[Any], value: str | None) -> Any | None:
     """Safely convert a string to a Home Assistant DeviceClass enum, avoiding ValueError crashes."""
     if not value:
@@ -48,15 +49,17 @@ def _safe_enum_lookup(enum_cls: type[Any], value: str | None) -> Any | None:
     except ValueError:
         return None
 
+
 def _find_enum_value(enum_cls: Any, possible_names: list[str]) -> int | None:
     """Safely find an enum integer value from a list of candidate names."""
     for name in possible_names:
         try:
             if hasattr(enum_cls, name):
                 return int(getattr(enum_cls, name))
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             continue
     return None
+
 
 class CoAPSensorConvert:
     """Centralized registry for converting CoAP types to Home Assistant device classes.
@@ -69,23 +72,42 @@ class CoAPSensorConvert:
         """Dynamically build converter map using resolved protobuf enum values."""
         converters = {}
 
-        sensor_val = _find_enum_value(coap_pb2.EntityType, ["SENSOR", "ENTITY_SENSOR", "ENTITY_TYPE_SENSOR"])
+        sensor_val = _find_enum_value(
+            coap_pb2.EntityType, ["SENSOR", "ENTITY_SENSOR", "ENTITY_TYPE_SENSOR"]
+        )
         if sensor_val is not None:
-            converters[sensor_val] = lambda sub: _safe_enum_lookup(SensorDeviceClass, sub)
+            converters[sensor_val] = lambda sub: _safe_enum_lookup(
+                SensorDeviceClass, sub
+            )
 
-        binary_val = _find_enum_value(coap_pb2.EntityType, ["BINARY_SENSOR", "ENTITY_BINARY_SENSOR", "ENTITY_TYPE_BINARY_SENSOR"])
+        binary_val = _find_enum_value(
+            coap_pb2.EntityType,
+            ["BINARY_SENSOR", "ENTITY_BINARY_SENSOR", "ENTITY_TYPE_BINARY_SENSOR"],
+        )
         if binary_val is not None:
-            converters[binary_val] = lambda sub: _safe_enum_lookup(BinarySensorDeviceClass, sub)
+            converters[binary_val] = lambda sub: _safe_enum_lookup(
+                BinarySensorDeviceClass, sub
+            )
 
-        switch_val = _find_enum_value(coap_pb2.EntityType, ["SWITCH", "ENTITY_SWITCH", "ENTITY_TYPE_SWITCH"])
+        switch_val = _find_enum_value(
+            coap_pb2.EntityType, ["SWITCH", "ENTITY_SWITCH", "ENTITY_TYPE_SWITCH"]
+        )
         if switch_val is not None:
-            converters[switch_val] = lambda sub: _safe_enum_lookup(SwitchDeviceClass, sub)
+            converters[switch_val] = lambda sub: _safe_enum_lookup(
+                SwitchDeviceClass, sub
+            )
 
-        light_val = _find_enum_value(coap_pb2.EntityType, ["LIGHT", "ENTITY_LIGHT", "ENTITY_TYPE_LIGHT"])
+        light_val = _find_enum_value(
+            coap_pb2.EntityType, ["LIGHT", "ENTITY_LIGHT", "ENTITY_TYPE_LIGHT"]
+        )
         if light_val is not None:
-            converters[light_val] = lambda sub: _safe_enum_lookup(LightDeviceClass, sub) or LightDeviceClass.ONOFF
+            converters[light_val] = lambda sub: (
+                _safe_enum_lookup(LightDeviceClass, sub) or LightDeviceClass.ONOFF
+            )
 
-        unspecified_val = _find_enum_value(coap_pb2.EntityType, ["UNSPECIFIED", "ENTITY_TYPE_UNSPECIFIED", "ZERO"])
+        unspecified_val = _find_enum_value(
+            coap_pb2.EntityType, ["UNSPECIFIED", "ENTITY_TYPE_UNSPECIFIED", "ZERO"]
+        )
         if unspecified_val is not None:
             converters[unspecified_val] = lambda _: None
 
@@ -94,7 +116,13 @@ class CoAPSensorConvert:
     @classmethod
     def convert(
         cls, sensor_type: int | None, sub_type: str | None = None
-    ) -> SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | LightDeviceClass | None:
+    ) -> (
+        SensorDeviceClass
+        | BinarySensorDeviceClass
+        | SwitchDeviceClass
+        | LightDeviceClass
+        | None
+    ):
         """Convert coarse sensor type and sub-type into a native HA Device Class."""
         converters = cls._get_converters()
         converter = converters.get(sensor_type)
@@ -108,7 +136,13 @@ class CoAPSensor:
     id: int | None
     state: StateType
     name: str | None = None
-    type: SensorDeviceClass | BinarySensorDeviceClass | SwitchDeviceClass | LightDeviceClass | None = None
+    type: (
+        SensorDeviceClass
+        | BinarySensorDeviceClass
+        | SwitchDeviceClass
+        | LightDeviceClass
+        | None
+    ) = None
     unit: str | None = None
     state_class: SensorStateClass | None = None
     entity_category: str | None = None
@@ -140,7 +174,7 @@ class CoAPSensor:
         )
 
     @classmethod
-    def from_coap_raw_proto(cls, raw: bytes|None) -> CoAPSensor:
+    def from_coap_raw_proto(cls, raw: bytes | None) -> CoAPSensor:
         """Factory method to parse a CoAP protobuf sensor payload cleanly."""
         if raw is None:
             raise ValueError("Raw protobuf data cannot be None.")
@@ -174,7 +208,9 @@ class CoAPSensor:
             name=raw_data.get("name"),
             type=CoAPSensorConvert.convert(sensor_type, sub_type),
             unit=raw_data.get("unit"),
-            state_class=_safe_enum_lookup(SensorStateClass, raw_data.get("state_class")),
+            state_class=_safe_enum_lookup(
+                SensorStateClass, raw_data.get("state_class")
+            ),
         )
 
     @classmethod
@@ -201,6 +237,7 @@ class CoAPSensor:
             "state_class": sensor.state_class.value if sensor.state_class else None,
         }
 
+
 @dataclass
 class CoAPDevice:
     """API device."""
@@ -219,7 +256,7 @@ class CoAPDevice:
     sensors: list[CoAPSensor] = field(default_factory=list)
 
     @classmethod
-    def from_coap_raw_update_proto(cls, raw: bytes|None) -> CoAPDevice:
+    def from_coap_raw_update_proto(cls, raw: bytes | None) -> CoAPDevice:
         """Factory method to parse a CoAP protobuf device update payload cleanly."""
         if raw is None:
             raise ValueError("Raw protobuf data cannot be None.")
@@ -234,11 +271,14 @@ class CoAPDevice:
             manufacturer=None,
             sw_version=None,
             hw_version=None,
-            sensors=[CoAPSensor.from_coap_update_proto(entity) for entity in proto_device.entities],
+            sensors=[
+                CoAPSensor.from_coap_update_proto(entity)
+                for entity in proto_device.entities
+            ],
         )
 
     @classmethod
-    def from_coap_raw_new_proto(cls, raw: bytes|None) -> CoAPDevice:
+    def from_coap_raw_new_proto(cls, raw: bytes | None) -> CoAPDevice:
         """Factory method to parse a CoAP protobuf device payload cleanly."""
         if raw is None:
             raise ValueError("Raw protobuf data cannot be None.")
@@ -254,7 +294,9 @@ class CoAPDevice:
             sw_version=proto_device.fw_version,
             hw_version=proto_device.hw_version,
             firmware_url=proto_device.firmware_url or None,
-            sensors=[CoAPSensor.from_coap_proto(entity) for entity in proto_device.entities],
+            sensors=[
+                CoAPSensor.from_coap_proto(entity) for entity in proto_device.entities
+            ],
         )
 
     @classmethod
@@ -269,7 +311,9 @@ class CoAPDevice:
             sw_version=raw_data.get("sw_version"),
             hw_version=raw_data.get("hw_version"),
             firmware_url=raw_data.get("firmware_url"),
-            sensors=[CoAPSensor.from_dict(sensor) for sensor in raw_data.get("sensors", [])]
+            sensors=[
+                CoAPSensor.from_dict(sensor) for sensor in raw_data.get("sensors", [])
+            ],
         )
 
     @classmethod
@@ -287,6 +331,7 @@ class CoAPDevice:
             "sensors": [CoAPSensor.to_dict(sensor) for sensor in device.sensors],
         }
 
+
 @dataclass
 class CoAPObserveValue:
     """Structured representation of a CoAP observe value."""
@@ -297,23 +342,20 @@ class CoAPObserveValue:
     @classmethod
     def from_coap_proto(cls, entity: coap_pb2.EntityValue) -> CoAPObserveValue:
         """Factory method to parse a CoAP protobuf observe value payload cleanly."""
-        return cls(
-            id=entity.id,
-            state=entity.value
-        )
+        return cls(id=entity.id, state=entity.value)
 
     @classmethod
     def from_dict(cls, raw_data: dict[Any, Any]) -> CoAPObserveValue:
         """Factory method to parse a raw JSON observe value payload cleanly."""
-        id=raw_data.get("id")
+        id = raw_data.get("id")
         if id is None:
             raise ValueError("Observe value must contain an 'id' field.")
         if not isinstance(id, int):
-            raise ValueError(f"Observe value 'id' must be an integer, got {type(id).__name__}.")
-        return cls(
-            id=int(id),
-            state=raw_data.get("value", None)
-        )
+            raise ValueError(
+                f"Observe value 'id' must be an integer, got {type(id).__name__}."
+            )
+        return cls(id=int(id), state=raw_data.get("value", None))
+
 
 @dataclass
 class CoAPObserveResponse:
@@ -328,7 +370,9 @@ class CoAPObserveResponse:
         sensors = device.sensors if device.sensors else []
         return cls(
             id=device.id,
-            sensors=[CoAPObserveValue(id=sensor.id, state=sensor.state) for sensor in sensors]
+            sensors=[
+                CoAPObserveValue(id=sensor.id, state=sensor.state) for sensor in sensors
+            ],
         )
 
     @classmethod
@@ -336,7 +380,9 @@ class CoAPObserveResponse:
         """Convert a CoAPObserveResponse instance back to a dictionary."""
         return {
             "id": response.id,
-            "sensors": [{"id": sensor.id, "value": sensor.state} for sensor in response.sensors],
+            "sensors": [
+                {"id": sensor.id, "value": sensor.state} for sensor in response.sensors
+            ],
         }
 
     @classmethod
@@ -345,7 +391,10 @@ class CoAPObserveResponse:
         proto_response = coap_pb2.ObserveDeviceResponse()
         proto_response.type = coap_pb2.OBSERVE_TYPE_UPDATE
         for sensor in response.sensors:
-            proto_response.entities.add(id=sensor.id if sensor.id is not None else 0, value=sensor.state if sensor.state is not None else "")
+            proto_response.entities.add(
+                id=sensor.id if sensor.id is not None else 0,
+                value=sensor.state if sensor.state is not None else "",
+            )
         return proto_response.SerializeToString()
 
     def to_proto_health(self, counter: int = 0) -> bytes | None:
@@ -354,6 +403,7 @@ class CoAPObserveResponse:
         proto_response.type = coap_pb2.OBSERVE_TYPE_HEALTH_CHECK
         proto_response.counter = counter & 0xFFFFFFFF
         return proto_response.SerializeToString()
+
 
 @dataclass
 class CoAPObserveRequest:
@@ -367,7 +417,10 @@ class CoAPObserveRequest:
         """Factory method to parse a raw JSON observe request payload cleanly."""
         return cls(
             id=raw_data.get("id"),
-            sensors=[CoAPObserveValue.from_dict(sensor) for sensor in raw_data.get("sensors", [])]
+            sensors=[
+                CoAPObserveValue.from_dict(sensor)
+                for sensor in raw_data.get("sensors", [])
+            ],
         )
 
     @classmethod
@@ -378,7 +431,4 @@ class CoAPObserveRequest:
 
         proto = coap_pb2.ObserveDevice()
         proto.ParseFromString(raw)
-        return cls(
-            id=proto.id,
-            sensors=list(proto.entity_ids)
-        )
+        return cls(id=proto.id, sensors=list(proto.entity_ids))

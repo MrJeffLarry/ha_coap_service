@@ -39,8 +39,8 @@ async def test_update_entities_are_created_only_for_devices_with_firmware_urls(
     assert len(entities) == 1
     assert entities[0].unique_id == "with_url_firmware_update"
     assert entities[0].installed_version == "1.0.0"
+    assert entities[0].latest_version == "1.1.0"
     assert entities[0].release_url == "https://example.com/firmware.bin"
-    assert entities[0].has_update is True
     config_entry.async_on_unload.assert_called_once_with(unsubscribe)
 
     callback = connect.call_args.args[2]

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.update import (
     UpdateDeviceClass,
@@ -65,10 +65,12 @@ class CoAPFirmwareUpdate(CoordinatorEntity, UpdateEntity):
         """Initialize the firmware update entity."""
         super().__init__(coordinator)
         self.device = device
+        self.device_id = device.id
         self._firmware_url = device.firmware_url
         self._attr_unique_id = f"{device.id}_firmware_update"
         self._attr_device_info = get_device_info(coordinator, device)
         self._attr_installed_version = device.sw_version
+        self._attr_release_url = device.firmware_url
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -76,9 +78,8 @@ class CoAPFirmwareUpdate(CoordinatorEntity, UpdateEntity):
         device = self.coordinator.get_device_by_id(self.device_id)
         if device is None:
             _LOGGER.debug(
-                "No coordinator data for device %s sensor %s; keeping last known state",
+                "No coordinator data for device %s update entity; keeping last known state",
                 self.device_id,
-                self.id,
             )
             return
         self.device = device

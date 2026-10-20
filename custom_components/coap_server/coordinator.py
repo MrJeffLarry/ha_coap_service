@@ -4,27 +4,25 @@ import copy
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import timedelta
 
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass
-from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_PORT,
     CONF_SCAN_INTERVAL,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
-from .models import CoAPDevice, CoAPSensor, CoAPObserveResponse, CoAPObserveRequest, CoAPObserveValue
+from .models import CoAPDevice, CoAPSensor, CoAPObserveResponse, CoAPObserveValue
 
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
+
 
 @dataclass
 class ExampleAPIData:
@@ -32,7 +30,9 @@ class ExampleAPIData:
 
     controller_name: str
     devices: list[CoAPDevice]
-    coap_notify_callback: Callable[[str, int], Callable] | None = field(default=None, repr=False)
+    coap_notify_callback: Callable[[str, int], Callable] | None = field(
+        default=None, repr=False
+    )
 
 
 class ExampleCoordinator(DataUpdateCoordinator):
@@ -48,7 +48,9 @@ class ExampleCoordinator(DataUpdateCoordinator):
         self.name = f"{DOMAIN} ({config_entry.unique_id})"
         self.entry_id = config_entry.entry_id
 
-        _LOGGER.info(f"Initializing {self.name} with host 0.0.0.0:{self.port} devices {config_entry}")
+        _LOGGER.info(
+            f"Initializing {self.name} with host 0.0.0.0:{self.port} devices {config_entry}"
+        )
 
         # set variables from options.  You need a default here incase options have not been set
         self.poll_interval = config_entry.options.get(
@@ -65,10 +67,10 @@ class ExampleCoordinator(DataUpdateCoordinator):
             config_entry=config_entry,
             name=self.name,
             # Method to call on every update interval.
-            #update_method=self.async_update_data,
+            # update_method=self.async_update_data,
             # Polling interval. Will only be polled if there are subscribers.
             # Using config option here but you can just use a value.
-            #update_interval=timedelta(seconds=self.poll_interval),
+            # update_interval=timedelta(seconds=self.poll_interval),
         )
 
         # Persistent storage so known devices survive HA/coap_server restarts.
@@ -89,7 +91,7 @@ class ExampleCoordinator(DataUpdateCoordinator):
         return ExampleAPIData(
             controller_name=self.name,
             devices=devices,
-            coap_notify_callback=self.data.coap_notify_callback if self.data else None
+            coap_notify_callback=self.data.coap_notify_callback if self.data else None,
         )
 
     async def _async_restore_devices(self) -> list[CoAPDevice]:
@@ -160,12 +162,13 @@ class ExampleCoordinator(DataUpdateCoordinator):
             ExampleAPIData(
                 controller_name=self.name,
                 devices=devices,
-                coap_notify_callback=self.data.coap_notify_callback if self.data else None
-            ) # pyright: ignore[reportArgumentType]
+                coap_notify_callback=self.data.coap_notify_callback
+                if self.data
+                else None,
+            )  # pyright: ignore[reportArgumentType]
         )
         self._async_save_devices()
         return all_replaced
-
 
     def _remove_registry_device(self, device_id: str) -> None:
         """Remove the HA device (and its entities) so it can be recreated from scratch."""
@@ -231,18 +234,20 @@ class ExampleCoordinator(DataUpdateCoordinator):
                 ExampleAPIData(
                     controller_name=self.name,
                     devices=devices,
-                    coap_notify_callback=self.data.coap_notify_callback if self.data else None
-                ) # pyright: ignore[reportArgumentType]
+                    coap_notify_callback=self.data.coap_notify_callback
+                    if self.data
+                    else None,
+                )  # pyright: ignore[reportArgumentType]
             )
             # Maybe remove this one, we might not need this one...
-#            self._async_save_devices_debounced()
+        #            self._async_save_devices_debounced()
         return updated
 
-#
-#
-# Public methods called by the CoAP API to push data into the coordinator
-#
-#
+    #
+    #
+    # Public methods called by the CoAP API to push data into the coordinator
+    #
+    #
 
     def async_add_notifyer(self, listener) -> callable:
         """Add a listener to the coordinator."""
@@ -267,8 +272,10 @@ class ExampleCoordinator(DataUpdateCoordinator):
             ExampleAPIData(
                 controller_name=self.name,
                 devices=devices,
-                coap_notify_callback=self.data.coap_notify_callback if self.data else None
-            ) # pyright: ignore[reportArgumentType]
+                coap_notify_callback=self.data.coap_notify_callback
+                if self.data
+                else None,
+            )  # pyright: ignore[reportArgumentType]
         )
         self._async_save_devices()
         return True
@@ -289,7 +296,9 @@ class ExampleCoordinator(DataUpdateCoordinator):
         """
         return self._update_device(device)
 
-    def update_sensor_data(self, device_id: str, sensor_id: int, state: float | int | str | bool) -> bool:
+    def update_sensor_data(
+        self, device_id: str, sensor_id: int, state: float | int | str | bool
+    ) -> bool:
         """
         Called by switch.py to update sensor data into the coordinator.
         """
@@ -300,7 +309,9 @@ class ExampleCoordinator(DataUpdateCoordinator):
 
         sensor = self.get_sensor_by_id(device_id, sensor_id)
         if not sensor:
-            _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
+            _LOGGER.warning(
+                "Sensor with id %s not found for device %s", sensor_id, device_id
+            )
             return False
 
         # Don't mutate the stored sensor here; _update_device compares against it
@@ -325,14 +336,22 @@ class ExampleCoordinator(DataUpdateCoordinator):
                 for sensor in device.sensors:
                     if sensor.id == sensor_id:
                         return sensor
-        _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
+        _LOGGER.warning(
+            "Sensor with id %s not found for device %s", sensor_id, device_id
+        )
         return None
 
-    def get_subscribe_data(self, device_id: str, sensor_id: int) -> CoAPObserveResponse | None:
+    def get_subscribe_data(
+        self, device_id: str, sensor_id: int
+    ) -> CoAPObserveResponse | None:
         """Return True if a sensor is  notify_callback subscribed to the coordinator."""
 
         sensor = self.get_sensor_by_id(device_id, sensor_id)
         if not sensor:
-            _LOGGER.warning("Sensor with id %s not found for device %s", sensor_id, device_id)
+            _LOGGER.warning(
+                "Sensor with id %s not found for device %s", sensor_id, device_id
+            )
             return None
-        return CoAPObserveResponse(id=device_id, sensors=[CoAPObserveValue(id=sensor.id, state=sensor.state)])
+        return CoAPObserveResponse(
+            id=device_id, sensors=[CoAPObserveValue(id=sensor.id, state=sensor.state)]
+        )

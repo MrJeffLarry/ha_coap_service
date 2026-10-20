@@ -7,14 +7,13 @@ from aiocoap.credentials import DTLS as DTLSCredential
 from aiocoap.credentials import CredentialsMap
 from aiocoap.numbers.codes import Code
 from aiocoap.numbers.contentformat import ContentFormat
-from aiocoap.resource import ObservableResource
 
-from .const import DOMAIN
 from .models import CoAPDevice, CoAPObserveResponse
 
 _LOGGER = logging.getLogger(__name__)
 
 ObservationKey = collections.namedtuple("ObservationKey", ["token", "remote"])
+
 
 class DTLSNotAvailable(RuntimeError):
     """Raised when DTLS is requested but the DTLSSocket package is unavailable."""
@@ -31,7 +30,8 @@ class CoAPServer:
         use_dtls: bool = False,
         psk_identity: str | None = None,
         psk_key: str | None = None,
-        health_interval: int = 10) -> None:
+        health_interval: int = 10,
+    ) -> None:
         """Initialise services."""
         self.hass = hass
         self.port = port
@@ -52,7 +52,9 @@ class CoAPServer:
         root = resource.Site()
         root.add_resource(["whoami"], WhoAmI(self.hass, self.coordinator))
         root.add_resource(["device"], EndpointDevice(self.hass, self.coordinator))
-        self.observe_resource = EndpointDeviceObserveEntity(self.hass, self.coordinator, self.health_interval)
+        self.observe_resource = EndpointDeviceObserveEntity(
+            self.hass, self.coordinator, self.health_interval
+        )
         root.add_resource(["device", "observe"], self.observe_resource)
 
         server_credentials = None
@@ -89,7 +91,12 @@ class CoAPServer:
             # coaps:// (DTLS-secured) rather than plain coap://.
             transports = ["tinydtls_server"]
 
-        _LOGGER.info("Starting CoAP server on %s:%d (DTLS: %s)", "0.0.0.0", self.port, self.use_dtls)
+        _LOGGER.info(
+            "Starting CoAP server on %s:%d (DTLS: %s)",
+            "0.0.0.0",
+            self.port,
+            self.use_dtls,
+        )
 
         return await Context.create_server_context(
             root,
@@ -110,8 +117,8 @@ class CoAPServer:
             import filelock  # noqa: F401
         except ImportError:
             pass
-        import aiocoap.defaults
-        import aiocoap.protocol
+        import aiocoap.defaults  # noqa: F401
+        import aiocoap.protocol  # noqa: F401
 
 
 class WhoAmI(resource.Resource):
@@ -124,12 +131,12 @@ class WhoAmI(resource.Resource):
         """Get information about the CoAP server and the request."""
         _LOGGER.warning("Request: GET /WhoAmI")
         text = [f"Used protocol: {request.remote.scheme}."]
-#        text.append(
-#            f"Last reload {self.hass.data[DOMAIN][self.entry.entry_id]['load_time']}"
-#        )
-#        text.append(
-#            f"Devices {len(self.hass.data[DOMAIN][self.entry.entry_id]['discovered'])}"
-#        )
+        #        text.append(
+        #            f"Last reload {self.hass.data[DOMAIN][self.entry.entry_id]['load_time']}"
+        #        )
+        #        text.append(
+        #            f"Devices {len(self.hass.data[DOMAIN][self.entry.entry_id]['discovered'])}"
+        #        )
 
         try:
             text.append(f"Request came from {request.remote.hostinfo}.")
@@ -150,11 +157,12 @@ class WhoAmI(resource.Resource):
             content_format=ContentFormat.TEXT,
         )
 
+
 def uri_query(request: Message) -> dict[str, str] | None:
     """Extract device_id and sensor_id from the URI query string."""
     # This function assumes you have access to the request object
     # If not, you may need to pass it as a parameter
-    request.get_request_uri() # Populates request.opt.uri_query
+    request.get_request_uri()  # Populates request.opt.uri_query
     query_string = request.opt.uri_query if request.opt else None
 
     items: dict[str, str] = {}
@@ -162,6 +170,7 @@ def uri_query(request: Message) -> dict[str, str] | None:
         key, value = query.split("=", 1)
         items[key] = value
     return items
+
 
 def parse_observe_query(request: Message) -> tuple[str | None, list[int]]:
     """Return the device id and de-duplicated sensor ids from the query.
@@ -182,6 +191,7 @@ def parse_observe_query(request: Message) -> tuple[str | None, list[int]]:
                     sensor_ids.append(sensor_id)
     return device_id, sensor_ids
 
+
 # If device does not exist in HA it register here or at startup
 class EndpointDevice(resource.Resource):
     def __init__(self, hass, coordinator):
@@ -197,7 +207,9 @@ class EndpointDevice(resource.Resource):
             return Message(code=Code.BAD_REQUEST, payload=err)
 
         if self.coordinator.push_device_data(device):
-            return Message(code=Code.CHANGED, payload=b"Device updated successfully")  # or 2.04 if you want to swallow it temporarily
+            return Message(
+                code=Code.CHANGED, payload=b"Device updated successfully"
+            )  # or 2.04 if you want to swallow it temporarily
         return Message(code=Code.CREATED, payload=b"Device registered successfully")
 
     async def render_put(self, request: Message):
@@ -210,6 +222,7 @@ class EndpointDevice(resource.Resource):
             return Message(code=Code.CHANGED, payload=b"Device updated successfully")
 
         return Message(code=Code.NOT_FOUND, payload=b"Device not found")
+
 
 # listen for device events from HA -> Device
 class EndpointDeviceObserveEntity(resource.ObservableResource):
@@ -255,7 +268,9 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         _LOGGER.debug("Extracted device_id: %s, sensor_ids: %s", device_id, sensor_ids)
 
         if not device_id or not sensor_ids:
-            _LOGGER.error("Rejected observation request: 'id' and at least one 'sensor_id' are required in URI query string.")
+            _LOGGER.error(
+                "Rejected observation request: 'id' and at least one 'sensor_id' are required in URI query string."
+            )
             return
 
         unique_keys = [f"{device_id}:{sensor_id}" for sensor_id in sensor_ids]
@@ -272,7 +287,11 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         # Clean up when the client cancels or disconnects
         def on_observation_cancelled():
-            _LOGGER.debug("Observation cancelled for client %s on device %s", request.remote, device_id)
+            _LOGGER.debug(
+                "Observation cancelled for client %s on device %s",
+                request.remote,
+                device_id,
+            )
 
             # Cancel the pending timer handle to stop looping
             timer_handle = self.handle.pop(key, None)
@@ -281,7 +300,9 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
             self.health_counters.pop(key, None)
 
             # send disconnect message to device if needed
-            response = Message(payload=b"Observation cancelled", content_format=ContentFormat.TEXT)
+            response = Message(
+                payload=b"Observation cancelled", content_format=ContentFormat.TEXT
+            )
 
             obs = self.observations.get(key)
             if obs:
@@ -305,8 +326,8 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
             self.handle[key].cancel()
 
         self.handle[key] = asyncio.get_running_loop().call_later(
-            self.keep_alive_interval,
-            self.notify_health, key, device_id)
+            self.keep_alive_interval, self.notify_health, key, device_id
+        )
 
     def notify_health(self, key: ObservationKey, device_id: str):
         """Periodic keep-alive (OBSERVE_TYPE_HEALTH_CHECK); carries no entity values."""
@@ -320,19 +341,23 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         counter = self.health_counters.get(key, 0) + 1
         self.health_counters[key] = counter
 
-        obs.trigger(Message(
-            code=Code.CONTENT,
-            payload=CoAPObserveResponse(id=device_id).to_proto_health(counter),
-            content_format=ContentFormat.OCTETSTREAM
-        ))
+        obs.trigger(
+            Message(
+                code=Code.CONTENT,
+                payload=CoAPObserveResponse(id=device_id).to_proto_health(counter),
+                content_format=ContentFormat.OCTETSTREAM,
+            )
+        )
 
-    def notify(self, device_id: str|None=None, sensor_id: int|None=None):
+    def notify(self, device_id: str | None = None, sensor_id: int | None = None):
         """Triggers an OBSERVE_TYPE_UPDATE carrying the changed value to clients observing this entity."""
         _LOGGER.debug("Targeted notify for device %s", device_id)
 
-        unique_key = f"{device_id}:{sensor_id}" if device_id and sensor_id is not None else None
+        unique_key = (
+            f"{device_id}:{sensor_id}" if device_id and sensor_id is not None else None
+        )
         if not unique_key or unique_key not in self.device_observers:
-             return
+            return
 
         if sensor_id is None:
             return
@@ -341,15 +366,19 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
         _LOGGER.debug("Subscribe data: %s", sub_data)
 
         if sub_data is None:
-            _LOGGER.warning("No subscribe data found for device %s and sensor %s", device_id, sensor_id)
+            _LOGGER.warning(
+                "No subscribe data found for device %s and sensor %s",
+                device_id,
+                sensor_id,
+            )
             return
 
         response = Message(
             code=Code.CONTENT,
             payload=CoAPObserveResponse.to_proto(sub_data),
-            content_format=ContentFormat.OCTETSTREAM
+            content_format=ContentFormat.OCTETSTREAM,
         )
-#         response = Message(payload=payload, content_format=ContentFormat.TEXT)
+        #         response = Message(payload=payload, content_format=ContentFormat.TEXT)
         # Loop through and update only the subscribers tied to this device_id
         for key in list(self.device_observers[unique_key]):
             obs = self.observations.get(key)
@@ -372,7 +401,11 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
             sub_data = self.coordinator.get_subscribe_data(device_id, sensor_id)
             _LOGGER.debug("Subscribe data: %s", sub_data)
             if sub_data is None:
-                _LOGGER.warning("No subscribe data found for device %s and sensor %s", device_id, sensor_id)
+                _LOGGER.warning(
+                    "No subscribe data found for device %s and sensor %s",
+                    device_id,
+                    sensor_id,
+                )
                 continue
             sensors.extend(sub_data.sensors)
 
@@ -381,6 +414,8 @@ class EndpointDeviceObserveEntity(resource.ObservableResource):
 
         return Message(
             code=Code.CONTENT,
-            payload=CoAPObserveResponse.to_proto(CoAPObserveResponse(id=device_id, sensors=sensors)),
-            content_format=ContentFormat.OCTETSTREAM
+            payload=CoAPObserveResponse.to_proto(
+                CoAPObserveResponse(id=device_id, sensors=sensors)
+            ),
+            content_format=ContentFormat.OCTETSTREAM,
         )

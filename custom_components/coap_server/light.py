@@ -38,7 +38,7 @@ async def async_setup_entry(
 def _to_int(value: Any) -> int:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0
 
 
@@ -130,7 +130,11 @@ class CoAPLight(CoordinatorEntity, LightEntity, RestoreEntity):
             if value == 0:
                 value = 0xFFFFFF
         elif self._light_class == LightDeviceClass.BRIGHTNESS:
-            value = kwargs.get(ATTR_BRIGHTNESS) or getattr(self, "_attr_brightness", None) or 255
+            value = (
+                kwargs.get(ATTR_BRIGHTNESS)
+                or getattr(self, "_attr_brightness", None)
+                or 255
+            )
         else:
             value = 1
         self._push(int(value))
