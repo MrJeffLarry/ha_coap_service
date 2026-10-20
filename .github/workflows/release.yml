@@ -22,6 +22,7 @@ jobs:
       - name: add version to manifest.json
         run: |
           jq --arg version "${{ github.ref_name }}" '.version = $version' ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json > temp_manifest.json
+          rm ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json
           mv temp_manifest.json ${{ github.workspace }}/custom_components/${{ env.COMPOMENT }}/manifest.json
 
       - name: Create zip file for the integration
