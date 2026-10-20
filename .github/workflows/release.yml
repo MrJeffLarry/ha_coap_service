@@ -59,4 +59,5 @@ jobs:
 
       - name: scp component to local server
         run: |
+            ssh -t root@home.bas3.io 'rm -rf /config/custom_components/${{ env.COMPOMENT }}'
             scp -r ${{ github.workspace }}/${{ env.COMPOMENT }} root@home.bas3.io:/config/custom_components/${{ env.COMPOMENT }}
