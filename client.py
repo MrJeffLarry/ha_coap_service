@@ -152,7 +152,6 @@ async def send_new_request(device_id: str, port: int, address: str):
         sub_type="voltage",
     )
 
-
     payload: bytes = device.SerializeToString()
     # 3. Create the PUT request
     # NOTE: The path '/sensors/device001/data' matches your tree structure
