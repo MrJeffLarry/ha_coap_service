@@ -43,21 +43,3 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ github.workspace }}/${{ env.COMPOMENT }}.zip
-  local:
-    name: Local upload
-    needs: release
-    runs-on: [self-hosted, linux, x64, k8s]
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v6.0.2
-
-      - name: Download component artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.COMPOMENT }}-release
-          path: ${{ github.workspace }}/${{ env.COMPOMENT }}
-
-      - name: scp component to local server
-        run: |
-            ssh -t root@home.bas3.io 'rm -rf /config/custom_components/${{ env.COMPOMENT }}'
-            scp -r ${{ github.workspace }}/${{ env.COMPOMENT }} root@home.bas3.io:/config/custom_components/${{ env.COMPOMENT }}
