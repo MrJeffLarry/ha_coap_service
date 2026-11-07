@@ -29,6 +29,14 @@ class LightDeviceClass(StrEnum):
     RGB = "rgb"
 
 
+class CoAPCustomSensorClass(StrEnum):
+    """Numeric sensor types without a Home Assistant device class."""
+
+    PM4 = "pm4"
+    VOC_INDEX = "voc_index"
+    NOX_INDEX = "nox_index"
+
+
 def _coerce_binary_state(value) -> bool:
     """Coerce an incoming raw sensor value into a bool for binary sensors."""
     if isinstance(value, bool):
@@ -76,8 +84,9 @@ class CoAPSensorConvert:
             coap_pb2.EntityType, ["SENSOR", "ENTITY_SENSOR", "ENTITY_TYPE_SENSOR"]
         )
         if sensor_val is not None:
-            converters[sensor_val] = lambda sub: _safe_enum_lookup(
-                SensorDeviceClass, sub
+            converters[sensor_val] = lambda sub: (
+                _safe_enum_lookup(SensorDeviceClass, sub)
+                or _safe_enum_lookup(CoAPCustomSensorClass, sub)
             )
 
         binary_val = _find_enum_value(
@@ -118,6 +127,7 @@ class CoAPSensorConvert:
         cls, sensor_type: int | None, sub_type: str | None = None
     ) -> (
         SensorDeviceClass
+        | CoAPCustomSensorClass
         | BinarySensorDeviceClass
         | SwitchDeviceClass
         | LightDeviceClass
@@ -138,6 +148,7 @@ class CoAPSensor:
     name: str | None = None
     type: (
         SensorDeviceClass
+        | CoAPCustomSensorClass
         | BinarySensorDeviceClass
         | SwitchDeviceClass
         | LightDeviceClass

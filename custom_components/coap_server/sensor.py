@@ -3,6 +3,7 @@ import logging
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
+    SensorStateClass,
 )
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
@@ -13,7 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import MyConfigEntry
 from .coordinator import ExampleCoordinator
 from .entity import async_setup_entity_entry_helper, get_device_info
-from .models import CoAPDevice, CoAPSensor
+from .models import CoAPCustomSensorClass, CoAPDevice, CoAPSensor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ async def async_setup_entry(
         hass,
         config_entry,
         CoAPSensorEntity,
-        SensorDeviceClass,
+        (SensorDeviceClass, CoAPCustomSensorClass),
         async_add_entities,
     )
 
@@ -44,7 +45,11 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
         self.sensor = sensor
         self.device_id = device.id
         self.id = sensor.id
-        self._attr_device_class = sensor.type.value
+        self._attr_device_class = (
+            sensor.type if isinstance(sensor.type, SensorDeviceClass) else None
+        )
+        if isinstance(sensor.type, CoAPCustomSensorClass):
+            self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_unique_id = f"{self.device_id}_{self.id}"
         self._attr_device_info = get_device_info(coordinator, device)
         self._attr_entity_category = (
@@ -75,7 +80,7 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
     @property
     def device_class(self) -> str | None:
         """Return the device class."""
-        if self.sensor and self.sensor.type:
+        if self.sensor and isinstance(self.sensor.type, SensorDeviceClass):
             return self.sensor.type.value
         return None
 
@@ -92,4 +97,6 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
     @property
     def native_unit_of_measurement(self) -> str | None:
         """Return the unit of measurement."""
+        if isinstance(self.sensor.type, CoAPCustomSensorClass):
+            return self.sensor.unit or None
         return self.sensor.unit

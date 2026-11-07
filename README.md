@@ -50,6 +50,33 @@ update entity linked to that URL in Home Assistant. The `type` enum values are
 `ENTITY_TYPE_LIGHT`; `sub_type` should be a Home Assistant device-class value
 for sensor, binary sensor, switch, or light entities (light sub types: `onoff`, `brightness` 0-255, `rgb` packed 0xRRGGBB value).
 
+### Environmental measurements
+
+These measurement types are supported for any device model, including the
+SEN65. The integration does not read sensors directly: a CoAP device must
+register each available measurement as a separate `ENTITY_TYPE_SENSOR` with a
+unique numeric ID, then send updates using those IDs. Use these `sub_type` and
+`unit` values:
+
+| Measurement | `sub_type` | `unit` |
+| --- | --- | --- |
+| Temperature | `temperature` | `°C` |
+| Relative humidity | `humidity` | `%` |
+| PM1.0 mass concentration | `pm1` | `μg/m³` |
+| PM2.5 mass concentration | `pm25` | `μg/m³` |
+| PM4.0 mass concentration | `pm4` | `μg/m³` |
+| PM10 mass concentration | `pm10` | `μg/m³` |
+| VOC index | `voc_index` | empty |
+| NOx index | `nox_index` | empty |
+
+The indices are numeric measurement sensors without a Home Assistant device
+class. For example, the SEN65 reports unitless Sensirion index values, not VOC
+or nitrogen oxide concentrations; do not send concentrations as these indices.
+PM4 uses the Home Assistant device class when available and otherwise is
+exposed as a numeric measurement sensor without a device class.
+Other sensor subtypes must match a Home Assistant sensor device class;
+unrecognized subtypes are not exposed.
+
 ### Update payload
 
 PUT a serialized `UpdateDevice` message with the device `id` and an `entities`
