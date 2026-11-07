@@ -35,8 +35,8 @@ def get_device_info(coordinator: ExampleCoordinator, device: CoAPDevice) -> Devi
 def async_setup_entity_entry_helper(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    entity_class: type[CoordinatorEntity] | None,
-    entity_type: type | None,  # SensorDeviceClass
+    entity_class: type[CoordinatorEntity],
+    entity_type: type | tuple[type, ...],
     async_add_entities: AddEntitiesCallback,
 ) -> None:
 
@@ -49,7 +49,7 @@ def async_setup_entity_entry_helper(
                     "Adding new device data for sensor: %s type %s match %s",
                     sensor.name,
                     type(sensor.type).__name__,
-                    entity_type.__name__,
+                    entity_class.__name__,
                 )
                 sensors.append(entity_class(coordinator, device, sensor))
             else:
@@ -57,7 +57,7 @@ def async_setup_entity_entry_helper(
                     "Skipping sensor: %s type %s does not match %s",
                     sensor.name,
                     type(sensor.type).__name__,
-                    entity_type.__name__,
+                    entity_class.__name__,
                 )
 
     _LOGGER.info(
@@ -81,7 +81,7 @@ def async_setup_entity_entry_helper(
                     "Adding new device data for sensor: %s type %s match %s",
                     sensor.name,
                     type(sensor.type).__name__,
-                    entity_type.__name__,
+                    entity_class.__name__,
                 )
                 new_entities.append(entity_class(coordinator, device, sensor))
             else:
@@ -89,7 +89,7 @@ def async_setup_entity_entry_helper(
                     "Skipping sensor: %s type %s does not match %s",
                     sensor.name,
                     type(sensor.type).__name__,
-                    entity_type.__name__,
+                    entity_class.__name__,
                 )
         async_add_entities(new_entities)
 
