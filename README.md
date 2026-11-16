@@ -74,8 +74,9 @@ class. For example, the SEN65 reports unitless Sensirion index values, not VOC
 or nitrogen oxide concentrations; do not send concentrations as these indices.
 PM4 uses the Home Assistant device class when available and otherwise is
 exposed as a numeric measurement sensor without a device class.
-Other sensor subtypes must match a Home Assistant sensor device class;
-unrecognized subtypes are not exposed.
+Other sensor subtypes can match a Home Assistant sensor device class.
+Unrecognized subtypes are exposed as generic sensors, hidden by default in
+the entity registry. They can be made visible in Home Assistant.
 
 ### Update payload
 

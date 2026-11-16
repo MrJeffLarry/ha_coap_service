@@ -46,7 +46,18 @@ async def test_environmental_measurements_registration_restore_and_update(
             value=value,
         )
     raw_device.entities.add(
-        id=9, type=coap_pb2.ENTITY_TYPE_SENSOR, sub_type="unrecognized"
+        id=9,
+        type=coap_pb2.ENTITY_TYPE_SENSOR,
+        sub_type="unrecognized",
+        name="Unknown",
+        unit="widgets",
+        value=42.0,
+    )
+    raw_device.entities.add(
+        id=10, type=coap_pb2.ENTITY_TYPE_SENSOR, name="No subtype", value=7.0
+    )
+    raw_device.entities.add(
+        id=11, type=coap_pb2.ENTITY_TYPE_BINARY_SENSOR, sub_type="motion"
     )
     coordinator = MagicMock()
     coordinator.data.controller_name = "CoAP"
@@ -70,9 +81,9 @@ async def test_environmental_measurements_registration_restore_and_update(
     await sensor.async_setup_entry(MagicMock(), config_entry, add_entities)
 
     entities = add_entities.call_args.args[0]
-    assert len(entities) == 8
+    assert len(entities) == 10
     for created, (sub_type, name, unit, value, device_class) in zip(
-        entities, MEASUREMENTS, strict=True
+        entities[:8], MEASUREMENTS, strict=True
     ):
         assert created.name == name
         assert created.native_value == value
@@ -81,9 +92,22 @@ async def test_environmental_measurements_registration_restore_and_update(
         if sub_type in ("voc_index", "nox_index"):
             assert created.state_class == SensorStateClass.MEASUREMENT
 
+    generic = entities[8]
+    assert generic.name == "Unknown"
+    assert generic.native_value == 42.0
+    assert generic.native_unit_of_measurement == "widgets"
+    assert generic.device_class is None
+    assert not generic.entity_registry_visible_default
+    assert generic.entity_registry_enabled_default
+    assert all(item.entity_registry_visible_default for item in entities[:8])
+    assert entities[9].name == "No subtype"
+    assert entities[9].native_value == 7.0
+    assert not entities[9].entity_registry_visible_default
+
     callback = connect.call_args.args[2]
     await callback(registered)
-    assert len(add_entities.call_args.args[0]) == 8
+    assert len(add_entities.call_args.args[0]) == 10
+    assert not add_entities.call_args.args[0][8].entity_registry_visible_default
 
     for created in entities:
         updated_sensor = restored.sensors[created.id - 1]

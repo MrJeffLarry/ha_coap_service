@@ -174,7 +174,7 @@ class ExampleCoordinator(DataUpdateCoordinator):
         """Remove the HA device (and its entities) so it can be recreated from scratch."""
         registry = dr.async_get(self.hass)
         identifier = (DOMAIN, f"{self.name}-{device_id}")
-        entry = registry.async_get_device(identifiers={identifier})
+        entry = registry.async_get_device_by_identifier(identifier)
         if entry is not None:
             registry.async_remove_device(entry.id)
 
