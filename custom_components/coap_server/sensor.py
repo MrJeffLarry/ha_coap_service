@@ -29,7 +29,7 @@ async def async_setup_entry(
         hass,
         config_entry,
         CoAPSensorEntity,
-        (SensorDeviceClass, CoAPCustomSensorClass),
+        (SensorDeviceClass, CoAPCustomSensorClass, type(None)),
         async_add_entities,
     )
 
@@ -50,11 +50,13 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
         )
         if isinstance(sensor.type, CoAPCustomSensorClass):
             self._attr_state_class = SensorStateClass.MEASUREMENT
+        if sensor.type is None:
+            self._attr_entity_registry_visible_default = False
         self._attr_unique_id = f"{self.device_id}_{self.id}"
         self._attr_device_info = get_device_info(coordinator, device)
         self._attr_entity_category = (
             EntityCategory.DIAGNOSTIC
-            if self.sensor.type.value == SensorDeviceClass.BATTERY
+            if self.sensor.type == SensorDeviceClass.BATTERY
             else None
         )
 
