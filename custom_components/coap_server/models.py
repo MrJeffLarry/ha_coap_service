@@ -64,7 +64,9 @@ def _find_enum_value(enum_cls: Any, possible_names: list[str]) -> int | None:
         try:
             if hasattr(enum_cls, name):
                 return int(getattr(enum_cls, name))
-        except ValueError, AttributeError:
+        except ValueError:
+            continue
+        except AttributeError:
             continue
     return None
 

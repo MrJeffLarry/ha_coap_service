@@ -10,6 +10,12 @@ default: `5683`). It uses UDP and exposes the resources described below.
 Add **CoAP Server** from Home Assistant's Integrations page and choose a port.
 Devices must be able to reach Home Assistant at that port.
 
+The integration advertises the endpoint through Zeroconf/DNS-SD as
+`_coap._udp.local.` (or `_coaps._udp.local.` when DTLS is enabled), including
+the configured port. Thread devices can discover it when their border router
+forwards mDNS/DNS-SD between Thread and the local network; this does not
+register the service directly with an SRP server.
+
 By default, the server accepts unencrypted `coap://` traffic. To require
 encrypted `coaps://` traffic, enable DTLS and configure a PSK identity and key.
 DTLS requires the optional `DTLSSocket` package and its native build
