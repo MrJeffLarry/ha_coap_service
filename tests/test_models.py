@@ -150,6 +150,30 @@ def test_coap_device_from_new_proto() -> None:
     assert device.sensors[0].unit == "°C"
 
 
+def test_coap_enum_sensor_from_proto_and_update() -> None:
+    """Preserve enum sensor options and string states in protobuf messages."""
+    raw_device = coap_pb2.NewDevice(id="enum-device")
+    raw_device.entities.add(
+        id=1,
+        type=coap_pb2.ENTITY_TYPE_SENSOR,
+        sub_type="enum",
+        enum_value="heating",
+        options=["off", "heating", "cooling"],
+    )
+
+    device = CoAPDevice.from_coap_raw_new_proto(raw_device.SerializeToString())
+    sensor = device.sensors[0]
+
+    assert sensor.state == "heating"
+    assert sensor.options == ["off", "heating", "cooling"]
+    assert CoAPSensor.from_dict(CoAPSensor.to_dict(sensor)).options == sensor.options
+
+    raw_update = coap_pb2.UpdateDevice(id="enum-device")
+    raw_update.entities.add(id=1, enum_value="cooling")
+    updated = CoAPDevice.from_coap_raw_update_proto(raw_update.SerializeToString())
+    assert updated.sensors[0].state == "cooling"
+
+
 def test_coap_device_dict_round_trip_preserves_firmware_url() -> None:
     """Test persisting a registered firmware URL."""
     device = CoAPDevice.from_dict(
@@ -261,3 +285,10 @@ def test_coap_observe_response_to_proto() -> None:
         (7, 23.5),
         (9, 42.0),
     ]
+
+    enum_response = CoAPObserveResponse(
+        id="device002", sensors=[CoAPObserveValue(id=10, state="cooling")]
+    )
+    raw_response.ParseFromString(CoAPObserveResponse.to_proto(enum_response))
+    assert raw_response.entities[0].enum_value == "cooling"
+    assert CoAPObserveValue.from_coap_proto(raw_response.entities[0]).state == "cooling"
