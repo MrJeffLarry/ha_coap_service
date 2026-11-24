@@ -204,12 +204,13 @@ async def test_environmental_put_updates_coordinator_and_entities(hass) -> None:
     update.entities.add(id=9, enum_value="active")
     response = await endpoint.render_put(Message(payload=update.SerializeToString()))
     assert response.code == Code.CHANGED
-    for created, (_, _, _, value, _) in zip(entities, MEASUREMENTS, strict=True):
+    assert len(entities) == len(MEASUREMENTS) + 1
+    for created, (_, _, _, value, _) in zip(entities[:-1], MEASUREMENTS, strict=True):
         created.async_write_ha_state = Mock()
         created._handle_coordinator_update()
         assert created.native_value == value + 10
         created.async_write_ha_state.assert_called_once()
-    enum_entity = entities[8]
+    enum_entity = entities[-1]
     enum_entity.async_write_ha_state = Mock()
     enum_entity._handle_coordinator_update()
     assert enum_entity.native_value == "active"
