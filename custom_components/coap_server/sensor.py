@@ -97,6 +97,13 @@ class CoAPSensorEntity(CoordinatorEntity, SensorEntity):
         return self.sensor.state
 
     @property
+    def options(self) -> list[str] | None:
+        """Return the allowed values for an enum sensor."""
+        if self.sensor.type == SensorDeviceClass.ENUM:
+            return self.sensor.options
+        return None
+
+    @property
     def native_unit_of_measurement(self) -> str | None:
         """Return the unit of measurement."""
         if isinstance(self.sensor.type, CoAPCustomSensorClass):

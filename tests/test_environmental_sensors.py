@@ -59,6 +59,13 @@ async def test_environmental_measurements_registration_restore_and_update(
     raw_device.entities.add(
         id=11, type=coap_pb2.ENTITY_TYPE_BINARY_SENSOR, sub_type="motion"
     )
+    raw_device.entities.add(
+        id=12,
+        type=coap_pb2.ENTITY_TYPE_SENSOR,
+        sub_type="enum",
+        enum_value="heating",
+        options=["off", "heating", "cooling"],
+    )
     coordinator = MagicMock()
     coordinator.data.controller_name = "CoAP"
     coordinator.push_device_data.return_value = False
@@ -81,7 +88,7 @@ async def test_environmental_measurements_registration_restore_and_update(
     await sensor.async_setup_entry(MagicMock(), config_entry, add_entities)
 
     entities = add_entities.call_args.args[0]
-    assert len(entities) == 10
+    assert len(entities) == 11
     for created, (sub_type, name, unit, value, device_class) in zip(
         entities[:8], MEASUREMENTS, strict=True
     ):
@@ -103,13 +110,19 @@ async def test_environmental_measurements_registration_restore_and_update(
     assert entities[9].name == "No subtype"
     assert entities[9].native_value == 7.0
     assert not entities[9].entity_registry_visible_default
+    enum_entity = entities[10]
+    assert enum_entity.device_class == "enum"
+    assert enum_entity.native_value == "heating"
+    assert enum_entity.options == ["off", "heating", "cooling"]
 
     callback = connect.call_args.args[2]
     await callback(registered)
-    assert len(add_entities.call_args.args[0]) == 10
+    assert len(add_entities.call_args.args[0]) == 11
     assert not add_entities.call_args.args[0][8].entity_registry_visible_default
 
     for created in entities:
+        if created.device_class == "enum":
+            continue
         updated_sensor = restored.sensors[created.id - 1]
         updated_sensor.state += 1
         coordinator.get_sensor_by_id.return_value = updated_sensor
@@ -169,6 +182,14 @@ async def test_environmental_put_updates_coordinator_and_entities(hass) -> None:
             unit=unit,
             value=value,
         )
+    raw_device.entities.add(
+        id=9,
+        type=coap_pb2.ENTITY_TYPE_SENSOR,
+        sub_type="enum",
+        enum_value="idle",
+        options=["idle", "active"],
+        name="Mode",
+    )
     response = await endpoint.render_post(
         Message(payload=raw_device.SerializeToString())
     )
@@ -180,10 +201,18 @@ async def test_environmental_put_updates_coordinator_and_entities(hass) -> None:
     update = coap_pb2.UpdateDevice(id="environment")
     for entity_id, (_, _, _, value, _) in enumerate(MEASUREMENTS, 1):
         update.entities.add(id=entity_id, value=value + 10)
+    update.entities.add(id=9, enum_value="active")
     response = await endpoint.render_put(Message(payload=update.SerializeToString()))
     assert response.code == Code.CHANGED
-    for created, (_, _, _, value, _) in zip(entities, MEASUREMENTS, strict=True):
+    assert len(entities) == len(MEASUREMENTS) + 1
+    for created, (_, _, _, value, _) in zip(entities[:-1], MEASUREMENTS, strict=True):
         created.async_write_ha_state = Mock()
         created._handle_coordinator_update()
         assert created.native_value == value + 10
         created.async_write_ha_state.assert_called_once()
+    enum_entity = entities[-1]
+    enum_entity.async_write_ha_state = Mock()
+    enum_entity._handle_coordinator_update()
+    assert enum_entity.native_value == "active"
+    assert enum_entity.options == ["idle", "active"]
+    enum_entity.async_write_ha_state.assert_called_once()

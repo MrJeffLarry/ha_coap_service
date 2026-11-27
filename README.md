@@ -48,13 +48,20 @@ The authoritative message definitions are in
 ### Registration payload
 
 POST a serialized `NewDevice` message. Set its `id`, and include each entity's
-numeric `id`, numeric `value`, `type`, and optional `name`, `sub_type`, and
-`unit`. Device metadata (`manufacturer`, `model`, `fw_version`, and
+numeric `id`, `type`, and either numeric `value` or string `enum_value`, plus
+optional `name`, `sub_type`, and `unit`. Device metadata (`manufacturer`,
+`model`, `fw_version`, and
 `hw_version`) is optional. Add the optional `firmware_url` to expose a firmware
 update entity linked to that URL in Home Assistant. The `type` enum values are
 `ENTITY_TYPE_SENSOR`, `ENTITY_TYPE_BINARY_SENSOR`, `ENTITY_TYPE_SWITCH`, and
 `ENTITY_TYPE_LIGHT`; `sub_type` should be a Home Assistant device-class value
 for sensor, binary sensor, switch, or light entities (light sub types: `onoff`, `brightness` 0-255, `rgb` packed 0xRRGGBB value).
+
+For an enum sensor, use `sub_type: "enum"`, send its current string state in
+`enum_value`, and provide the allowed string values in `options`. Updates for
+enum sensors must set `enum_value` on the corresponding `EntityValue`; other
+sensor types continue using the numeric `value` field. Observe responses use
+the same `enum_value` field for enum states.
 
 ### Environmental measurements
 
@@ -87,18 +94,19 @@ the entity registry. They can be made visible in Home Assistant.
 ### Update payload
 
 PUT a serialized `UpdateDevice` message with the device `id` and an `entities`
-list of `{id, value}` pairs. Entity IDs must match IDs previously registered
-for that device. Unknown entity IDs are ignored; updates do not change entity
-metadata.
+list of `{id, value}` pairs for numeric sensors, or `{id, enum_value}` pairs
+for enum sensors. Entity IDs must match IDs previously registered for that
+device. Unknown entity IDs are ignored; updates do not change entity metadata.
 
 ### Observe payload and notifications
 
 Send a GET with the CoAP Observe option and both query parameters:
 `id` identifies the device and `sensor_id` identifies the entity. The initial
 response and later notifications are serialized `ObserveDeviceResponse`
-messages containing `entities` entries with an `id` and `value`. The server
-also sends a refresh notification every 10 seconds while the subscription is
-active. Cancel the CoAP observation to unsubscribe.
+messages containing `entities` entries with an `id` and either `value`
+(numeric sensors) or `enum_value` (enum sensors). The server also sends a
+refresh notification every 10 seconds while the subscription is active. Cancel
+the CoAP observation to unsubscribe.
 
 Example client commands (replace the address and port as needed):
 

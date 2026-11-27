@@ -21,6 +21,8 @@ message NewEntity {
   string sub_type = 4;
   string unit = 5;
   optional string name = 6;
+  optional string enum_value = 7;
+  repeated string options = 8;
 }
 
 /* Airfan sensor telemetry message */
@@ -38,6 +40,7 @@ message NewDevice {
 message EntityValue {
   uint32 id = 2;
   double value = 3;
+  optional string enum_value = 4;
 }
 
 message UpdateDevice {

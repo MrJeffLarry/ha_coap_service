@@ -159,6 +159,7 @@ class CoAPSensor:
     unit: str | None = None
     state_class: SensorStateClass | None = None
     entity_category: str | None = None
+    options: list[str] = field(default_factory=list)
 
     @classmethod
     def from_coap_update_proto(cls, entity: coap_pb2.EntityValue) -> CoAPSensor:
@@ -166,7 +167,7 @@ class CoAPSensor:
 
         return cls(
             id=entity.id,
-            state=entity.value,
+            state=entity.enum_value if entity.HasField("enum_value") else entity.value,
             name=None,
             type=None,
             unit=None,
@@ -179,11 +180,12 @@ class CoAPSensor:
 
         return cls(
             id=entity.id,
-            state=entity.value,
+            state=entity.enum_value if entity.HasField("enum_value") else entity.value,
             name=entity.name,
             type=CoAPSensorConvert.convert(entity.type, entity.sub_type),
             unit=entity.unit,
             state_class=_safe_enum_lookup(SensorStateClass, None),
+            options=list(entity.options),
         )
 
     @classmethod
@@ -196,11 +198,12 @@ class CoAPSensor:
 
         return cls(
             id=entity.id,
-            state=entity.value,
+            state=entity.enum_value if entity.HasField("enum_value") else entity.value,
             name=entity.name,
             type=CoAPSensorConvert.convert(entity.type, entity.sub_type),
             unit=entity.unit,
             state_class=_safe_enum_lookup(SensorStateClass, None),
+            options=list(entity.options),
         )
 
     @classmethod
@@ -224,6 +227,7 @@ class CoAPSensor:
             state_class=_safe_enum_lookup(
                 SensorStateClass, raw_data.get("state_class")
             ),
+            options=list(raw_data.get("options", [])),
         )
 
     @classmethod
@@ -248,6 +252,7 @@ class CoAPSensor:
             "sub_type": sensor.type.value if sensor.type else None,
             "unit": sensor.unit,
             "state_class": sensor.state_class.value if sensor.state_class else None,
+            "options": sensor.options,
         }
 
 
@@ -355,7 +360,10 @@ class CoAPObserveValue:
     @classmethod
     def from_coap_proto(cls, entity: coap_pb2.EntityValue) -> CoAPObserveValue:
         """Factory method to parse a CoAP protobuf observe value payload cleanly."""
-        return cls(id=entity.id, state=entity.value)
+        return cls(
+            id=entity.id,
+            state=entity.enum_value if entity.HasField("enum_value") else entity.value,
+        )
 
     @classmethod
     def from_dict(cls, raw_data: dict[Any, Any]) -> CoAPObserveValue:
@@ -404,10 +412,13 @@ class CoAPObserveResponse:
         proto_response = coap_pb2.ObserveDeviceResponse()
         proto_response.type = coap_pb2.OBSERVE_TYPE_UPDATE
         for sensor in response.sensors:
-            proto_response.entities.add(
-                id=sensor.id if sensor.id is not None else 0,
-                value=sensor.state if sensor.state is not None else "",
+            entity = proto_response.entities.add(
+                id=sensor.id if sensor.id is not None else 0
             )
+            if isinstance(sensor.state, str):
+                entity.enum_value = sensor.state
+            elif sensor.state is not None:
+                entity.value = sensor.state
         return proto_response.SerializeToString()
 
     def to_proto_health(self, counter: int = 0) -> bytes | None:
